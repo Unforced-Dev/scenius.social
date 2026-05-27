@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "lexicons": [
+    "social.scenius.scene",
+    "social.scenius.membership",
+    "social.scenius.attestation",
+    "social.scenius.eventContext"
+  ],
+  "resolutions": {}
+}

@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+dist/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# database
+*.db
+*.db-journal
+*.db-wal
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# os
+.DS_Store
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# generated lexicon code
+lib/lexicons/

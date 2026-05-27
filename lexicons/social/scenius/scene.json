@@ -1,0 +1,105 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.scene",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A scene — a community, neighborhood, interest group, or city. Scenes are the primary organizational unit in scenius.",
+      "record": {
+        "type": "object",
+        "required": ["name", "createdAt"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "description": "Display name of the scene."
+          },
+          "handle": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "description": "URL-safe slug for the scene. Unique within the creating account."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 3000,
+            "description": "Free-text description of the scene."
+          },
+          "type": {
+            "type": "string",
+            "knownValues": ["place", "interest", "hybrid"],
+            "description": "Whether this scene is place-defined, interest-defined, or both."
+          },
+          "location": {
+            "type": "union",
+            "refs": [
+              "#locationGeo",
+              "#locationAddress"
+            ],
+            "description": "Primary location of the scene, if place-defined."
+          },
+          "avatar": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp"],
+            "maxSize": 1000000,
+            "description": "Avatar image for the scene."
+          },
+          "banner": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp"],
+            "maxSize": 2000000,
+            "description": "Banner image for the scene page."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string", "maxLength": 64 },
+            "maxLength": 16,
+            "description": "Free-form tags for discovery."
+          },
+          "visibility": {
+            "type": "string",
+            "knownValues": ["public", "unlisted", "members"],
+            "default": "public",
+            "description": "Who can see this scene's page and events."
+          },
+          "memberPolicy": {
+            "type": "string",
+            "knownValues": ["open", "attestation", "invite"],
+            "default": "attestation",
+            "description": "How new members join. 'open' = anyone, 'attestation' = requires mutual attestation, 'invite' = requires builder invitation."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "locationGeo": {
+      "type": "object",
+      "description": "WGS84 coordinates, compatible with community.lexicon.location.geo.",
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": { "type": "string", "description": "Latitude as decimal string." },
+        "lon": { "type": "string", "description": "Longitude as decimal string." },
+        "name": { "type": "string", "maxLength": 256 }
+      }
+    },
+    "locationAddress": {
+      "type": "object",
+      "description": "Structured address, compatible with community.lexicon.location.address.",
+      "required": ["locality", "country"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 256 },
+        "street": { "type": "string", "maxLength": 256 },
+        "locality": { "type": "string", "maxLength": 128, "description": "City or town." },
+        "region": { "type": "string", "maxLength": 128, "description": "State or province." },
+        "postalCode": { "type": "string", "maxLength": 32 },
+        "country": { "type": "string", "maxLength": 2, "description": "ISO 3166-1 alpha-2." }
+      }
+    }
+  }
+}

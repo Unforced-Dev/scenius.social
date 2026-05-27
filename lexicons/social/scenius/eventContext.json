@@ -1,0 +1,47 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.eventContext",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "Links a community.lexicon.calendar.event to a scene. Created by scene builders to curate the scene calendar. The event itself lives in the shared community namespace; this sidecar adds scene context.",
+      "record": {
+        "type": "object",
+        "required": ["event", "scene", "createdAt"],
+        "properties": {
+          "event": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Reference to the community.lexicon.calendar.event record."
+          },
+          "scene": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Reference to the scene this event belongs to."
+          },
+          "curatedBy": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the scene builder who curated this event onto the scene calendar."
+          },
+          "visibility": {
+            "type": "string",
+            "knownValues": ["public", "members"],
+            "default": "public",
+            "description": "Override the scene's default visibility for this specific event."
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether this event is pinned to the top of the scene calendar."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

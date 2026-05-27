@@ -1,0 +1,37 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.attestation",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A peer-issued attestation that someone belongs to a scene. Membership crystallizes when mutual attestations reach social density, not via central declaration.",
+      "record": {
+        "type": "object",
+        "required": ["scene", "subject", "createdAt"],
+        "properties": {
+          "scene": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Reference to the scene this attestation is for."
+          },
+          "subject": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the person being attested as a scene member."
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Optional free-text statement about why the attester believes this person belongs to the scene."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

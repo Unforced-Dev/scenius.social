@@ -1,0 +1,37 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.membership",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A membership relation between an actor and a scene. Created by scene builders or via the scene's member policy.",
+      "record": {
+        "type": "object",
+        "required": ["scene", "member", "role", "createdAt"],
+        "properties": {
+          "scene": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "Reference to the scene record."
+          },
+          "member": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the member."
+          },
+          "role": {
+            "type": "string",
+            "knownValues": ["member", "builder", "facilitator"],
+            "description": "Role within the scene. 'builder' can curate the scene calendar. 'facilitator' can also manage membership."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}
