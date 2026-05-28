@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "scenes_handle_idx" ON "scenes" USING btree ("handle");

@@ -15,6 +15,13 @@
       "when": 1780009628690,
       "tag": "0001_groovy_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780011141203,
+      "tag": "0002_outstanding_wallop",
+      "breakpoints": true
     }
   ]
 }

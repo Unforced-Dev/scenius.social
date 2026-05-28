@@ -60,6 +60,10 @@ export const scenes = pgTable(
     index("scenes_author_idx").on(t.authorDid),
     index("scenes_visibility_idx").on(t.visibility),
     index("scenes_locality_idx").on(t.locationLocality),
+    // v0: globally-unique handles for deterministic /s/[handle] routing.
+    // (Revisit when federated duplicate-handle scenes become real — see the
+    // deferred design question on scene identity / credible exit.)
+    uniqueIndex("scenes_handle_idx").on(t.handle),
   ],
 );
 

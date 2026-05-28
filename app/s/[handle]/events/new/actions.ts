@@ -41,6 +41,7 @@ export async function createEventAction(
   const description = ((formData.get("description") as string) || "").trim();
   const mode = (formData.get("mode") as EventInput["mode"]) || "inperson";
   const locationName = ((formData.get("locationName") as string) || "").trim();
+  const locality = ((formData.get("locality") as string) || "").trim();
   const virtualUri = ((formData.get("virtualUri") as string) || "").trim();
 
   // Build ISO timestamps from local date + time inputs
@@ -58,7 +59,10 @@ export async function createEventAction(
     startsAt: startsAt.toISOString(),
     endsAt: endsAt?.toISOString(),
     mode,
-    location: locationName ? { name: locationName } : undefined,
+    location:
+      locationName || locality
+        ? { name: locationName || undefined, locality: locality || undefined }
+        : undefined,
     virtualUri: virtualUri || undefined,
   };
 

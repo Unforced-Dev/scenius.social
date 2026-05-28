@@ -4,6 +4,7 @@ import { AtUri } from "@atproto/syntax";
 import { db } from "@/lib/db";
 import { accounts, events, rsvps, scenes, memberships, attestations, eventContexts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { recomputeMemberCount, canCurate, canManageMembers } from "@/lib/scenius/write";
 
 const TAP_ADMIN_PASSWORD = process.env.TAP_ADMIN_PASSWORD;
 
@@ -211,6 +212,24 @@ async function handleScene(uri: AtUri, did: string, record: Record<string, unkno
 
 async function handleMembership(uri: AtUri, did: string, record: Record<string, unknown>, now: Date) {
   const scene = record.scene as { uri: string };
+
+  // AUTHORIZATION: a membership record is only trustworthy if its author is
+  // allowed to manage the scene's roster — the scene owner (bootstrap) or an
+  // existing facilitator/steward. Otherwise anyone could write a membership to
+  // their own PDS claiming a curation role and have us index it. Drop it.
+  const [sceneRow] = await db
+    .select({ authorDid: scenes.authorDid })
+    .from(scenes)
+    .where(eq(scenes.uri, scene.uri))
+    .limit(1);
+  const isOwner = sceneRow?.authorDid === did;
+  if (!isOwner && !(await canManageMembers(scene.uri, did))) {
+    console.warn(
+      `Rejected unauthorized membership ${uri.toString()} from ${did} for scene ${scene.uri}`,
+    );
+    return;
+  }
+
   await db
     .insert(memberships)
     .values({
@@ -229,6 +248,8 @@ async function handleMembership(uri: AtUri, did: string, record: Record<string, 
         indexedAt: now,
       },
     });
+
+  await recomputeMemberCount(scene.uri);
 }
 
 async function handleAttestation(uri: AtUri, did: string, record: Record<string, unknown>, now: Date) {
@@ -256,6 +277,16 @@ async function handleAttestation(uri: AtUri, did: string, record: Record<string,
 async function handleEventContext(uri: AtUri, did: string, record: Record<string, unknown>, now: Date) {
   const event = record.event as { uri: string };
   const scene = record.scene as { uri: string };
+
+  // AUTHORIZATION: only a builder+ of the scene may curate an event onto it.
+  // The signing DID (did) is the curator; verify their role before indexing.
+  if (!(await canCurate(scene.uri, did))) {
+    console.warn(
+      `Rejected unauthorized eventContext ${uri.toString()} from ${did} for scene ${scene.uri}`,
+    );
+    return;
+  }
+
   await db
     .insert(eventContexts)
     .values({
@@ -293,9 +324,16 @@ async function handleDelete(uri: AtUri) {
     case "social.scenius.scene":
       await db.delete(scenes).where(eq(scenes.uri, uriStr));
       break;
-    case "social.scenius.membership":
+    case "social.scenius.membership": {
+      const [m] = await db
+        .select({ sceneUri: memberships.sceneUri })
+        .from(memberships)
+        .where(eq(memberships.uri, uriStr))
+        .limit(1);
       await db.delete(memberships).where(eq(memberships.uri, uriStr));
+      if (m) await recomputeMemberCount(m.sceneUri);
       break;
+    }
     case "social.scenius.attestation":
       await db.delete(attestations).where(eq(attestations.uri, uriStr));
       break;

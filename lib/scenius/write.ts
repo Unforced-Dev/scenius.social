@@ -1,4 +1,5 @@
 import { Agent } from "@atproto/api";
+import { AtUri } from "@atproto/syntax";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -78,6 +79,9 @@ export async function createScene(
   };
   if (location) record.location = location;
 
+  // --- PDS writes first, with compensation on partial failure ---
+  // atproto has no cross-record transaction; if the second write fails we
+  // delete the first so we never leave a scene without its steward.
   const res = await agent.com.atproto.repo.createRecord({
     repo: did,
     collection: NSID.scene,
@@ -85,7 +89,27 @@ export async function createScene(
   });
   const sceneUri = res.data.uri;
 
-  // Optimistic index of the scene
+  const mRecord = {
+    $type: NSID.membership,
+    scene: { uri: sceneUri, cid: res.data.cid },
+    member: did,
+    role: "steward",
+    createdAt,
+  };
+  let mRes;
+  try {
+    mRes = await agent.com.atproto.repo.createRecord({
+      repo: did,
+      collection: NSID.membership,
+      record: mRecord,
+    });
+  } catch (err) {
+    // Compensate: remove the orphaned scene so it isn't left steward-less.
+    await deleteRecordSafe(agent, did, sceneUri);
+    throw err;
+  }
+
+  // --- Both PDS writes succeeded → optimistic index (Tap reconciles later) ---
   await db
     .insert(scenes)
     .values({
@@ -106,21 +130,11 @@ export async function createScene(
       locationCountry: loc?.country ?? null,
       createdAt: new Date(createdAt),
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: scenes.uri,
+      set: { name: input.name, handle: input.handle },
+    });
 
-  // Creator becomes the first steward
-  const mRecord = {
-    $type: NSID.membership,
-    scene: { uri: sceneUri, cid: res.data.cid },
-    member: did,
-    role: "steward",
-    createdAt,
-  };
-  const mRes = await agent.com.atproto.repo.createRecord({
-    repo: did,
-    collection: NSID.membership,
-    record: mRecord,
-  });
   await db
     .insert(memberships)
     .values({
@@ -131,7 +145,7 @@ export async function createScene(
       role: "steward",
       createdAt: new Date(createdAt),
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({ target: memberships.uri, set: { role: "steward" } });
 
   await recomputeMemberCount(sceneUri);
 
@@ -156,8 +170,8 @@ export type EventInput = {
  * - writes a social.scenius.eventContext linking event -> scene
  * Both optimistically indexed. Returns the event's at:// URI.
  *
- * The author must already hold builder/facilitator/steward in the scene
- * (enforced by the caller before invoking this).
+ * Self-defending: verifies the author holds a curation role in the scene
+ * before writing anything (callers should also gate, but this is the floor).
  */
 export async function createEvent(
   agent: Agent,
@@ -165,7 +179,17 @@ export async function createEvent(
   sceneUri: string,
   input: EventInput,
 ): Promise<{ eventUri: string }> {
+  // Authorization floor — don't trust the caller alone (defense-in-depth +
+  // closes the check/write gap by validating immediately before the writes).
+  if (!(await canCurate(sceneUri, did))) {
+    throw new Error("Not authorized to curate this scene.");
+  }
+
   const createdAt = new Date().toISOString();
+
+  // Resolve the scene's strongRef FIRST — before writing the event — so a
+  // missing/unresolvable scene can never orphan an event on the PDS.
+  const sceneRef = await resolveStrongRef(agent, sceneUri);
 
   // 1. The event itself (shared community lexicon — interoperable)
   const locations: Array<Record<string, unknown>> = [];
@@ -200,6 +224,30 @@ export async function createEvent(
   });
   const eventUri = eRes.data.uri;
 
+  // 2. The curation edge — compensate by deleting the event if this fails,
+  // so we never leave a globally-visible event without its scene link.
+  const ctxRecord = {
+    $type: NSID.eventContext,
+    event: { uri: eventUri, cid: eRes.data.cid },
+    scene: sceneRef,
+    curatedBy: did,
+    visibility: "public",
+    pinned: false,
+    createdAt,
+  };
+  let cRes;
+  try {
+    cRes = await agent.com.atproto.repo.createRecord({
+      repo: did,
+      collection: NSID.eventContext,
+      record: ctxRecord,
+    });
+  } catch (err) {
+    await deleteRecordSafe(agent, did, eventUri);
+    throw err;
+  }
+
+  // --- Both PDS writes succeeded → optimistic index ---
   await db
     .insert(events)
     .values({
@@ -216,24 +264,7 @@ export async function createEvent(
       virtualUri: input.virtualUri ?? null,
       createdAt: new Date(createdAt),
     })
-    .onConflictDoNothing();
-
-  // 2. The curation edge: pull the event onto the scene's calendar
-  const sceneRef = await resolveStrongRef(agent, sceneUri);
-  const ctxRecord = {
-    $type: NSID.eventContext,
-    event: { uri: eventUri, cid: eRes.data.cid },
-    scene: sceneRef,
-    curatedBy: did,
-    visibility: "public",
-    pinned: false,
-    createdAt,
-  };
-  const cRes = await agent.com.atproto.repo.createRecord({
-    repo: did,
-    collection: NSID.eventContext,
-    record: ctxRecord,
-  });
+    .onConflictDoUpdate({ target: events.uri, set: { name: input.name } });
 
   await db
     .insert(eventContexts)
@@ -247,12 +278,33 @@ export async function createEvent(
       pinned: false,
       createdAt: new Date(createdAt),
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: eventContexts.uri,
+      set: { eventUri, sceneUri },
+    });
 
   return { eventUri };
 }
 
 // --- Helpers ---
+
+/** Delete a record by at:// URI, swallowing errors (best-effort compensation). */
+async function deleteRecordSafe(
+  agent: Agent,
+  did: string,
+  uri: string,
+): Promise<void> {
+  try {
+    const u = new AtUri(uri);
+    await agent.com.atproto.repo.deleteRecord({
+      repo: did,
+      collection: u.collection,
+      rkey: u.rkey,
+    });
+  } catch (err) {
+    console.error(`Compensation delete failed for ${uri}:`, err);
+  }
+}
 
 /** Recompute a scene's denormalized member_count from the memberships table. */
 export async function recomputeMemberCount(sceneUri: string): Promise<void> {
@@ -264,8 +316,11 @@ export async function recomputeMemberCount(sceneUri: string): Promise<void> {
     .where(eq(scenes.uri, sceneUri));
 }
 
-/** Does the given DID hold a curation-capable role (builder+) in the scene? */
-export async function canCurate(sceneUri: string, did: string): Promise<boolean> {
+/** Look up a DID's role in a scene (from the indexed memberships). */
+async function roleInScene(
+  sceneUri: string,
+  did: string,
+): Promise<string | null> {
   const [row] = await db
     .select({ role: memberships.role })
     .from(memberships)
@@ -273,5 +328,30 @@ export async function canCurate(sceneUri: string, did: string): Promise<boolean>
       sql`${memberships.sceneUri} = ${sceneUri} AND ${memberships.memberDid} = ${did}`,
     )
     .limit(1);
-  return !!row && ["builder", "facilitator", "steward"].includes(row.role);
+  return row?.role ?? null;
+}
+
+/**
+ * Does the given DID hold a curation-capable role (builder+) in the scene?
+ *
+ * SERVER-SIDE AUTHORIZATION ONLY. The `did` MUST come from a verified source
+ * (an OAuth session, or a firehose record's signing DID). Never pass a
+ * client-supplied DID without verifying it first.
+ */
+export async function canCurate(sceneUri: string, did: string): Promise<boolean> {
+  const role = await roleInScene(sceneUri, did);
+  return !!role && ["builder", "facilitator", "steward"].includes(role);
+}
+
+/**
+ * May the given DID manage membership (add/remove members) in the scene?
+ * Facilitators and stewards only. Used to authorize firehose-ingested
+ * membership records. Same server-side-only contract as canCurate.
+ */
+export async function canManageMembers(
+  sceneUri: string,
+  did: string,
+): Promise<boolean> {
+  const role = await roleInScene(sceneUri, did);
+  return !!role && ["facilitator", "steward"].includes(role);
 }

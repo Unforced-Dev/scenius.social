@@ -45,9 +45,14 @@ export function CreateEventForm({ sceneHandle }: { sceneHandle: string }) {
         </select>
       </Field>
 
-      <Field label="Location" hint="Venue or place name.">
-        <input name="locationName" placeholder="RegenHub" className="input" />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Venue" hint="Place name.">
+          <input name="locationName" placeholder="RegenHub" className="input" />
+        </Field>
+        <Field label="City" hint="For discovery.">
+          <input name="locality" placeholder="Boulder" className="input" />
+        </Field>
+      </div>
 
       <Field label="Meeting link" hint="Optional — for online/hybrid events.">
         <input name="virtualUri" type="url" placeholder="https://…" className="input" />
