@@ -14,9 +14,11 @@
     "db:studio": "drizzle-kit studio",
     "gen-key": "tsx scripts/gen-key.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "verify:pds": "tsx scripts/verify-pds-write.ts",
     "lex:build": "lex build"
   },
   "dependencies": {
+    "@atproto/api": "^0.16.0",
     "@atproto/common-web": "^0.4.11",
     "@atproto/lex": "^0.0.10",
     "@atproto/oauth-client-node": "^0.3.15",

@@ -44,6 +44,7 @@ export const scenes = pgTable(
     type: text("type"),
     visibility: text("visibility").notNull().default("public"),
     memberPolicy: text("member_policy").notNull().default("attestation"),
+    governanceMode: text("governance_mode").notNull().default("administered"),
     locationName: text("location_name"),
     locationLat: text("location_lat"),
     locationLon: text("location_lon"),

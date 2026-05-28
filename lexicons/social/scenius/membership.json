@@ -23,8 +23,8 @@
           },
           "role": {
             "type": "string",
-            "knownValues": ["member", "builder", "facilitator"],
-            "description": "Role within the scene. 'builder' can curate the scene calendar. 'facilitator' can also manage membership."
+            "knownValues": ["member", "builder", "facilitator", "steward"],
+            "description": "Role within the scene. 'builder' can curate the scene calendar. 'facilitator' can also manage membership. 'steward' is owner-equivalent and holds transfer/exit rights. Hierarchy rule: you may grant only roles at or below your own; only stewards manage stewards."
           },
           "createdAt": {
             "type": "string",

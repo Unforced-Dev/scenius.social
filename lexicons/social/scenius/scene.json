@@ -71,6 +71,12 @@
             "default": "attestation",
             "description": "How new members join. 'open' = anyone, 'attestation' = requires mutual attestation, 'invite' = requires builder invitation."
           },
+          "governanceMode": {
+            "type": "string",
+            "knownValues": ["administered", "hybrid", "emergent"],
+            "default": "administered",
+            "description": "How builder/curation status is conferred. 'administered' = stewards/facilitators grant it explicitly. 'hybrid' = peer attestation feeds a steward-set threshold. 'emergent' = conferred by peer attestation alone. The record shape is identical across modes — moving from administered to emergent is a field flip, never a migration."
+          },
           "createdAt": {
             "type": "string",
             "format": "datetime"

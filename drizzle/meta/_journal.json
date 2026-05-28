@@ -8,6 +8,13 @@
       "when": 1779853166900,
       "tag": "0000_wakeful_jocasta",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780009628690,
+      "tag": "0001_groovy_omega_flight",
+      "breakpoints": true
     }
   ]
 }

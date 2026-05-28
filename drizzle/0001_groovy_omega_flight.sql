@@ -1,0 +1,1 @@
+ALTER TABLE "scenes" ADD COLUMN "governance_mode" text DEFAULT 'administered' NOT NULL;
