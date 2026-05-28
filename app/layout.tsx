@@ -60,27 +60,35 @@ function Nav() {
           >
             Scenes
           </Link>
-          <LoginButton />
+          <NavAuth />
         </div>
       </div>
     </nav>
   );
 }
 
-async function LoginButton() {
+async function NavAuth() {
   const { getDid } = await import("@/lib/auth/session");
   const did = await getDid();
 
   if (did) {
     return (
-      <form action="/oauth/logout" method="POST">
-        <button
-          type="submit"
+      <>
+        <Link
+          href="/scenes/new"
           className="rounded-lg px-3.5 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-surface-sunken transition-all"
         >
-          Sign out
-        </button>
-      </form>
+          Create scene
+        </Link>
+        <form action="/oauth/logout" method="POST">
+          <button
+            type="submit"
+            className="rounded-lg px-3.5 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-surface-sunken transition-all"
+          >
+            Sign out
+          </button>
+        </form>
+      </>
     );
   }
 

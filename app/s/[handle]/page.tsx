@@ -108,6 +108,14 @@ export default async function ScenePage({
     "bg-sage-50 text-sage-500",
   ];
 
+  const canCurate = did
+    ? memberRows.some(
+        (m) =>
+          m.memberDid === did &&
+          ["builder", "facilitator", "steward"].includes(m.role),
+      )
+    : false;
+
   return (
     <div className="min-h-screen">
       {/* Scene header */}
@@ -191,7 +199,17 @@ export default async function ScenePage({
         <div className="grid gap-10 lg:grid-cols-[1fr,320px]">
           {/* Events column */}
           <div>
-            <h2 className="font-display text-xl font-500 mb-5">Upcoming</h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-display text-xl font-500">Upcoming</h2>
+              {canCurate && (
+                <Link
+                  href={`/s/${handle}/events/new`}
+                  className="rounded-lg bg-text px-3.5 py-1.5 text-sm font-medium text-surface-raised hover:bg-text/90 transition-colors shadow-sm"
+                >
+                  + Add event
+                </Link>
+              )}
+            </div>
             {upcomingEvents.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-surface-raised/50 py-12 text-center">
                 <p className="text-sm text-text-tertiary">
