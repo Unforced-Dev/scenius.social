@@ -1,36 +1,101 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "Georgia", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --color-scenius-50: #f5f3ff;
-  --color-scenius-100: #ede9fe;
-  --color-scenius-200: #ddd6fe;
-  --color-scenius-300: #c4b5fd;
-  --color-scenius-400: #a78bfa;
-  --color-scenius-500: #8b5cf6;
-  --color-scenius-600: #7c3aed;
-  --color-scenius-700: #6d28d9;
-  --color-scenius-800: #5b21b6;
-  --color-scenius-900: #4c1d95;
+  --color-scenius-50: #faf5ff;
+  --color-scenius-100: #f0e4fc;
+  --color-scenius-200: #e0c8f9;
+  --color-scenius-300: #c99ef2;
+  --color-scenius-400: #ae6de8;
+  --color-scenius-500: #9645dc;
+  --color-scenius-600: #7e30be;
+  --color-scenius-700: #6a259d;
+  --color-scenius-800: #572080;
+  --color-scenius-900: #3d1660;
 
-  --color-ember-400: #fb923c;
-  --color-ember-500: #f97316;
-  --color-ember-600: #ea580c;
+  --color-ember-300: #fcd49a;
+  --color-ember-400: #f9b456;
+  --color-ember-500: #f59e0b;
+  --color-ember-600: #d97706;
 
-  --color-surface: #fafaf9;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f5f5f4;
-  --color-border: #e7e5e4;
-  --color-border-subtle: #f5f5f4;
-  --color-text: #1c1917;
-  --color-text-secondary: #78716c;
-  --color-text-tertiary: #a8a29e;
+  --color-sage-50: #f0faf4;
+  --color-sage-100: #d1f0de;
+  --color-sage-500: #22a85a;
+  --color-sage-600: #178a47;
+
+  --color-surface: #faf8f5;
+  --color-surface-raised: #fffefa;
+  --color-surface-sunken: #f3f0ec;
+  --color-border: #e8e3dc;
+  --color-border-subtle: #f0ece6;
+  --color-text: #1a1613;
+  --color-text-secondary: #6b6259;
+  --color-text-tertiary: #a39b91;
 }
 
 @layer base {
   body {
     @apply bg-surface text-text antialiased;
   }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  30% { transform: translate(3%, -15%); }
+  50% { transform: translate(12%, 9%); }
+  70% { transform: translate(9%, 4%); }
+  90% { transform: translate(-1%, 7%); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease both;
+}
+
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  animation: grain 8s steps(10) infinite;
+  z-index: 1;
 }

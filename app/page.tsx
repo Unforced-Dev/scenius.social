@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { scenes, events, eventContexts, accounts, rsvps } from "@/lib/db/schema";
-import { eq, gte, asc, sql, count } from "drizzle-orm";
+import { scenes, events, eventContexts } from "@/lib/db/schema";
+import { eq, gte, asc } from "drizzle-orm";
 import Link from "next/link";
 
 export default async function Home() {
@@ -44,50 +44,57 @@ export default async function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border">
-        <div className="absolute inset-0 bg-gradient-to-br from-scenius-50 via-surface to-surface" />
-        <div className="relative mx-auto max-w-5xl px-4 py-24 sm:py-32">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            Where scenes
-            <br />
-            <span className="text-scenius-600">come alive</span>
-          </h1>
-          <p className="mt-4 max-w-xl text-lg text-text-secondary">
-            Discover and coordinate with the communities that matter to you.
-            Events, people, and places — organized by scenes, not algorithms.
-          </p>
-          <div className="mt-8 flex gap-3">
-            <Link
-              href="/scenes"
-              className="rounded-full bg-scenius-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-scenius-700 transition-colors"
-            >
-              Explore scenes
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-full bg-surface-raised px-6 py-2.5 text-sm font-semibold text-text shadow-sm ring-1 ring-border hover:bg-surface-sunken transition-colors"
-            >
-              Sign in with Bluesky
-            </Link>
+      <section className="relative overflow-hidden">
+        <div className="grain absolute inset-0 bg-gradient-to-b from-scenius-50/80 via-surface to-surface" />
+        <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28 sm:pb-20">
+          <div className="max-w-2xl animate-fade-up">
+            <h1 className="font-display text-5xl font-500 tracking-tight sm:text-6xl lg:text-7xl text-balance leading-[1.1]">
+              Where scenes{" "}
+              <em className="not-italic text-scenius-600">come alive</em>
+            </h1>
+            <p className="mt-6 text-lg leading-relaxed text-text-secondary sm:text-xl animate-fade-up stagger-1">
+              Discover and coordinate with the communities that matter to you.
+              Events, people, and places — organized by scenes, not algorithms.
+            </p>
+            <div className="mt-10 flex flex-wrap gap-3 animate-fade-up stagger-2">
+              <Link
+                href="/scenes"
+                className="rounded-lg bg-text px-6 py-3 text-sm font-semibold text-surface-raised shadow-md hover:shadow-lg hover:bg-text/90 transition-all"
+              >
+                Explore scenes
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-lg px-6 py-3 text-sm font-semibold text-text ring-1 ring-border hover:ring-text/20 hover:bg-surface-raised transition-all"
+              >
+                Sign in with Bluesky
+              </Link>
+            </div>
           </div>
+        </div>
+        <div className="relative mx-auto max-w-6xl px-6">
+          <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
         </div>
       </section>
 
       {/* Upcoming events */}
       {upcomingEvents.length > 0 && (
-        <section className="mx-auto max-w-5xl px-4 py-16">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-semibold">Upcoming</h2>
+        <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <h2 className="font-display text-2xl font-500 sm:text-3xl">Upcoming</h2>
+              <p className="mt-1 text-sm text-text-tertiary">What&apos;s happening soon</p>
+            </div>
             <Link
               href="/events"
-              className="text-sm font-medium text-scenius-600 hover:text-scenius-700"
+              className="text-sm font-medium text-text-secondary hover:text-text transition-colors"
             >
-              View all
+              View all &rarr;
             </Link>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {upcomingEvents.map((event) => (
-              <EventCard key={event.uri} event={event} />
+          <div className="space-y-2">
+            {upcomingEvents.map((event, i) => (
+              <EventRow key={event.uri} event={event} index={i} />
             ))}
           </div>
         </section>
@@ -95,19 +102,22 @@ export default async function Home() {
 
       {/* Scenes */}
       {featuredScenes.length > 0 && (
-        <section className="mx-auto max-w-5xl px-4 py-16">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-semibold">Scenes</h2>
+        <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <h2 className="font-display text-2xl font-500 sm:text-3xl">Scenes</h2>
+              <p className="mt-1 text-sm text-text-tertiary">Communities gathering in Boulder</p>
+            </div>
             <Link
               href="/scenes"
-              className="text-sm font-medium text-scenius-600 hover:text-scenius-700"
+              className="text-sm font-medium text-text-secondary hover:text-text transition-colors"
             >
-              View all
+              View all &rarr;
             </Link>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featuredScenes.map((scene) => (
-              <SceneCard key={scene.uri} scene={scene} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {featuredScenes.map((scene, i) => (
+              <SceneCard key={scene.uri} scene={scene} index={i} />
             ))}
           </div>
         </section>
@@ -115,27 +125,16 @@ export default async function Home() {
 
       {/* Empty state */}
       {upcomingEvents.length === 0 && featuredScenes.length === 0 && (
-        <section className="mx-auto max-w-5xl px-4 py-24 text-center">
-          <div className="mx-auto max-w-md">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-scenius-100">
-              <svg
-                className="h-8 w-8 text-scenius-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
-                />
+        <section className="mx-auto max-w-6xl px-6 py-32 text-center">
+          <div className="mx-auto max-w-md animate-fade-up">
+            <div className="mx-auto mb-6 h-20 w-20 rounded-2xl bg-scenius-100/60 flex items-center justify-center">
+              <svg className="h-10 w-10 text-scenius-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold">No scenes yet</h2>
-            <p className="mt-2 text-text-secondary">
-              scenius is just getting started. Sign in to create the first scene
-              and start building your community.
+            <h2 className="font-display text-2xl font-500">No scenes yet</h2>
+            <p className="mt-3 text-text-secondary">
+              scenius is just getting started. Sign in to create the first scene and begin building your community.
             </p>
           </div>
         </section>
@@ -144,8 +143,9 @@ export default async function Home() {
   );
 }
 
-function EventCard({
+function EventRow({
   event,
+  index,
 }: {
   event: {
     uri: string;
@@ -158,50 +158,57 @@ function EventCard({
     sceneName: string;
     sceneHandle: string | null;
   };
+  index: number;
 }) {
   const date = event.startsAt;
-  const month = date.toLocaleDateString("en-US", { month: "short" });
+  const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
   const day = date.getDate();
-  const time = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
 
   return (
-    <div className="group rounded-xl border border-border bg-surface-raised p-4 transition-shadow hover:shadow-md">
-      <div className="flex gap-4">
-        <div className="flex flex-col items-center">
-          <span className="text-xs font-medium uppercase text-scenius-600">
-            {month}
-          </span>
-          <span className="text-2xl font-bold leading-tight">{day}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold leading-snug group-hover:text-scenius-700 transition-colors truncate">
-            {event.name}
-          </h3>
-          <p className="mt-0.5 text-sm text-text-secondary">
-            {weekday} {time}
-          </p>
+    <div
+      className={`animate-fade-up stagger-${Math.min(index + 1, 6)} group flex items-center gap-5 rounded-xl border border-transparent bg-surface-raised px-5 py-4 transition-all hover:border-border hover:shadow-sm cursor-pointer`}
+    >
+      {/* Date block */}
+      <div className="flex flex-col items-center w-12 shrink-0">
+        <span className="text-[10px] font-semibold tracking-widest text-scenius-500">
+          {month}
+        </span>
+        <span className="text-2xl font-600 leading-none mt-0.5 font-display">{day}</span>
+      </div>
+
+      {/* Divider */}
+      <div className="w-px h-10 bg-border/60 shrink-0" />
+
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        <h3 className="font-semibold leading-snug group-hover:text-scenius-700 transition-colors truncate">
+          {event.name}
+        </h3>
+        <div className="mt-0.5 flex items-center gap-2 text-sm text-text-secondary">
+          <span>{weekday}, {time}</span>
           {event.locationName && (
-            <p className="mt-1 text-sm text-text-tertiary truncate">
-              {event.locationName}
-            </p>
+            <>
+              <span className="text-text-tertiary">&middot;</span>
+              <span className="text-text-tertiary truncate">{event.locationName}</span>
+            </>
           )}
-          <div className="mt-2">
-            <span className="inline-flex items-center rounded-full bg-scenius-50 px-2 py-0.5 text-xs font-medium text-scenius-700">
-              {event.sceneName}
-            </span>
-          </div>
         </div>
       </div>
+
+      {/* Scene tag */}
+      <span className="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-full bg-scenius-50 pl-2 pr-3 py-1 text-xs font-medium text-scenius-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-scenius-400" />
+        {event.sceneName}
+      </span>
     </div>
   );
 }
 
 function SceneCard({
   scene,
+  index,
 }: {
   scene: {
     uri: string;
@@ -213,43 +220,47 @@ function SceneCard({
     memberCount: number;
     tags: string[] | null;
   };
+  index: number;
 }) {
-  const href = scene.handle ? `/${scene.handle}` : "#";
+  const href = scene.handle ? `/s/${scene.handle}` : "#";
+  const typeColors: Record<string, string> = {
+    place: "bg-sage-50 text-sage-600",
+    interest: "bg-scenius-50 text-scenius-600",
+    hybrid: "bg-ember-300/30 text-ember-600",
+  };
 
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-border bg-surface-raised p-5 transition-shadow hover:shadow-md"
+      className={`animate-fade-up stagger-${Math.min(index + 1, 6)} group relative rounded-2xl border border-border bg-surface-raised p-6 transition-all hover:shadow-md hover:border-border/80`}
     >
       <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold group-hover:text-scenius-700 transition-colors">
-            {scene.name}
-          </h3>
-          {scene.locationLocality && (
-            <p className="mt-0.5 text-sm text-text-secondary">
-              {scene.locationLocality}
-            </p>
-          )}
-        </div>
+        <h3 className="font-display text-xl font-500 group-hover:text-scenius-700 transition-colors">
+          {scene.name}
+        </h3>
         {scene.type && (
-          <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-text-tertiary">
+          <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${typeColors[scene.type] || "bg-surface-sunken text-text-tertiary"}`}>
             {scene.type}
           </span>
         )}
       </div>
+      {scene.locationLocality && (
+        <p className="mt-1 text-sm text-text-tertiary">{scene.locationLocality}</p>
+      )}
       {scene.description && (
-        <p className="mt-2 line-clamp-2 text-sm text-text-secondary">
+        <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-text-secondary">
           {scene.description}
         </p>
       )}
-      <div className="mt-3 flex items-center gap-3 text-xs text-text-tertiary">
-        <span>{scene.memberCount} members</span>
-        {scene.tags?.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="rounded-full bg-scenius-50 px-2 py-0.5 text-scenius-700"
-          >
+      <div className="mt-4 flex items-center gap-4 text-xs text-text-tertiary">
+        <span className="flex items-center gap-1.5">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+          </svg>
+          {scene.memberCount} members
+        </span>
+        {scene.tags?.slice(0, 2).map((tag) => (
+          <span key={tag} className="rounded-full bg-surface-sunken px-2 py-0.5">
             {tag}
           </span>
         ))}
