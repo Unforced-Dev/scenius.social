@@ -1,32 +1,14 @@
 import { db } from "@/lib/db";
-import { scenes, events, eventContexts } from "@/lib/db/schema";
-import { eq, gte, asc } from "drizzle-orm";
+import { scenes } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { dateRail, formatEventTime, eventTz } from "@/lib/scenius/time";
+import { searchEvents } from "@/lib/scenius/discover";
 
 export default async function Home() {
-  const now = new Date();
-
-  const upcomingEvents = await db
-    .select({
-      uri: events.uri,
-      name: events.name,
-      startsAt: events.startsAt,
-      endsAt: events.endsAt,
-      mode: events.mode,
-      locationName: events.locationName,
-      locationLocality: events.locationLocality,
-      tzid: events.tzid,
-      authorDid: events.authorDid,
-      sceneName: scenes.name,
-      sceneHandle: scenes.handle,
-    })
-    .from(events)
-    .innerJoin(eventContexts, eq(events.uri, eventContexts.eventUri))
-    .innerJoin(scenes, eq(eventContexts.sceneUri, scenes.uri))
-    .where(gte(events.startsAt, now))
-    .orderBy(asc(events.startsAt))
-    .limit(12);
+  // searchEvents dedupes by event uri (an event curated into multiple scenes
+  // joins to multiple rows) — avoids duplicate React keys on the feed.
+  const upcomingEvents = await searchEvents({ limit: 12 });
 
   const featuredScenes = await db
     .select({
