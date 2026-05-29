@@ -45,7 +45,7 @@ export default async function Home() {
     <div className="min-h-screen">
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="grain absolute inset-0 bg-gradient-to-b from-scenius-50/80 via-surface to-surface" />
+        <div className="grain absolute inset-0 bg-gradient-to-b from-page via-paper to-paper" />
         <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-16 sm:pt-28 sm:pb-20">
           <div className="max-w-2xl animate-fade-up">
             <h1 className="font-display text-5xl font-500 tracking-tight sm:text-6xl lg:text-7xl text-balance leading-[1.1]">
@@ -172,9 +172,7 @@ function EventRow({
     >
       {/* Date block */}
       <div className="flex flex-col items-center w-12 shrink-0">
-        <span className="text-[10px] font-semibold tracking-widest text-scenius-500">
-          {month}
-        </span>
+        <span className="kicker text-[10px] text-brick">{month}</span>
         <span className="text-2xl font-600 leading-none mt-0.5 font-display">{day}</span>
       </div>
 
@@ -224,9 +222,9 @@ function SceneCard({
 }) {
   const href = scene.handle ? `/s/${scene.handle}` : "#";
   const typeColors: Record<string, string> = {
-    place: "bg-sage-50 text-sage-600",
-    interest: "bg-scenius-50 text-scenius-600",
-    hybrid: "bg-ember-300/30 text-ember-600",
+    place: "bg-moss/10 text-moss ring-1 ring-moss/20",
+    interest: "bg-sky/10 text-sky ring-1 ring-sky/20",
+    hybrid: "bg-brick/10 text-brick ring-1 ring-brick/20",
   };
 
   return (
@@ -239,7 +237,7 @@ function SceneCard({
           {scene.name}
         </h3>
         {scene.type && (
-          <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${typeColors[scene.type] || "bg-surface-sunken text-text-tertiary"}`}>
+          <span className={`kicker shrink-0 ml-3 rounded-sm px-2 py-0.5 text-[10px] font-medium ${typeColors[scene.type] || "bg-sunken text-ink-3"}`}>
             {scene.type}
           </span>
         )}

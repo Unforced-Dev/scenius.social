@@ -10,9 +10,9 @@ export default async function ScenesPage() {
     .where(eq(scenes.visibility, "public"));
 
   const typeColors: Record<string, string> = {
-    place: "bg-sage-50 text-sage-600",
-    interest: "bg-scenius-50 text-scenius-600",
-    hybrid: "bg-ember-300/30 text-ember-600",
+    place: "bg-moss/10 text-moss ring-1 ring-moss/20",
+    interest: "bg-sky/10 text-sky ring-1 ring-sky/20",
+    hybrid: "bg-brick/10 text-brick ring-1 ring-brick/20",
   };
 
   return (
@@ -43,7 +43,7 @@ export default async function ScenesPage() {
                   {scene.name}
                 </h2>
                 {scene.type && (
-                  <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${typeColors[scene.type] || "bg-surface-sunken text-text-tertiary"}`}>
+                  <span className={`kicker shrink-0 ml-3 rounded-sm px-2 py-0.5 text-[10px] font-medium ${typeColors[scene.type] || "bg-sunken text-ink-3"}`}>
                     {scene.type}
                   </span>
                 )}

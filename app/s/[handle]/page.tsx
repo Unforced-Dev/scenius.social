@@ -95,9 +95,9 @@ export default async function ScenePage({
     ]);
 
   const typeColors: Record<string, string> = {
-    place: "bg-sage-50 text-sage-600 ring-sage-100",
-    interest: "bg-scenius-50 text-scenius-600 ring-scenius-100",
-    hybrid: "bg-ember-300/30 text-ember-600 ring-ember-300/40",
+    place: "bg-moss/10 text-moss ring-moss/20",
+    interest: "bg-sky/10 text-sky ring-sky/20",
+    hybrid: "bg-brick/10 text-brick ring-brick/20",
   };
 
   const avatarColors = [
@@ -120,7 +120,7 @@ export default async function ScenePage({
     <div className="min-h-screen">
       {/* Scene header */}
       <header className="relative overflow-hidden border-b border-border/60">
-        <div className="grain absolute inset-0 bg-gradient-to-br from-scenius-50/60 via-surface to-surface" />
+        <div className="grain absolute inset-0 bg-gradient-to-br from-page via-paper to-paper" />
         <div className="relative mx-auto max-w-6xl px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <div className="animate-fade-up">
             <div className="flex items-center gap-3 mb-4">
@@ -129,7 +129,7 @@ export default async function ScenePage({
               </Link>
               <span className="text-text-tertiary">/</span>
               {scene.type && (
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ring-1 ${typeColors[scene.type] || "bg-surface-sunken text-text-tertiary ring-border"}`}>
+                <span className={`kicker rounded-sm px-2 py-0.5 text-[10px] font-medium ring-1 ${typeColors[scene.type] || "bg-sunken text-ink-3 ring-hairline"}`}>
                   {scene.type}
                 </span>
               )}
@@ -231,9 +231,7 @@ export default async function ScenePage({
                       className={`animate-fade-up stagger-${Math.min(i + 1, 6)} group flex items-center gap-5 rounded-xl border border-transparent bg-surface-raised px-5 py-4 transition-all hover:border-border hover:shadow-sm`}
                     >
                       <div className="flex flex-col items-center w-12 shrink-0">
-                        <span className="text-[10px] font-semibold tracking-widest text-scenius-500">
-                          {month}
-                        </span>
+                        <span className="kicker text-[10px] text-brick">{month}</span>
                         <span className="text-2xl font-600 leading-none mt-0.5 font-display">{day}</span>
                       </div>
                       <div className="w-px h-10 bg-border/60 shrink-0" />

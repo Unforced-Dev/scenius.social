@@ -1,44 +1,89 @@
 @import "tailwindcss";
 
+/*
+ * Broadsheet — "neighborhood almanac": ink on warm paper, a confident serif
+ * masthead, a listings-page calendar. Borders over shadows; ruthless type
+ * discipline (Fraunces display / Inter Tight UI / mono for data only); a
+ * meaningful scene-type color system (place=moss, interest=sky, hybrid=brick).
+ */
 @theme {
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Fraunces", "Georgia", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Inter Tight", "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono", "JetBrains Mono", ui-monospace, monospace;
 
-  --color-scenius-50: #faf5ff;
-  --color-scenius-100: #f0e4fc;
-  --color-scenius-200: #e0c8f9;
-  --color-scenius-300: #c99ef2;
-  --color-scenius-400: #ae6de8;
-  --color-scenius-500: #9645dc;
-  --color-scenius-600: #7e30be;
-  --color-scenius-700: #6a259d;
-  --color-scenius-800: #572080;
-  --color-scenius-900: #3d1660;
+  /* tighter radii than the soft-SaaS default — trimmed-paper feel */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
 
-  --color-ember-300: #fcd49a;
-  --color-ember-400: #f9b456;
-  --color-ember-500: #f59e0b;
-  --color-ember-600: #d97706;
+  /* --- canonical Broadsheet palette --- */
+  --color-paper: #f6f1e7;
+  --color-page: #fbf7ef;
+  --color-sunken: #ece4d5;
+  --color-ink: #16130e;
+  --color-ink-2: #5c5346;
+  --color-ink-3: #948a78;
+  --color-hairline: #d8cebc;
+  --color-hairline-soft: #e6ddcc;
 
-  --color-sage-50: #f0faf4;
-  --color-sage-100: #d1f0de;
-  --color-sage-500: #22a85a;
-  --color-sage-600: #178a47;
+  /* accents — also the scene-type semantic system */
+  --color-brick: #b0431e; /* primary accent / live / hybrid scenes */
+  --color-moss: #3f6b3a; /* place scenes / success */
+  --color-sky: #2f5269; /* interest scenes / links (AA on paper) */
+  --color-ochre: #9a6a12; /* pinned/featured (text-safe variant) */
 
-  --color-surface: #faf8f5;
-  --color-surface-raised: #fffefa;
-  --color-surface-sunken: #f3f0ec;
-  --color-border: #e8e3dc;
-  --color-border-subtle: #f0ece6;
-  --color-text: #1a1613;
-  --color-text-secondary: #6b6259;
-  --color-text-tertiary: #a39b91;
+  --shadow-edge: 0 1px 0 #d8cebc;
+  --shadow-hover: 0 2px 12px rgba(22, 19, 14, 0.06);
+
+  /* --- transitional aliases: old token names → new palette ---
+     keeps existing utility classes working while the purple dies everywhere.
+     (cleanup pass: rename classes to the canonical tokens above, drop these.) */
+  --color-surface: #f6f1e7;
+  --color-surface-raised: #fbf7ef;
+  --color-surface-sunken: #ece4d5;
+  --color-border: #d8cebc;
+  --color-border-subtle: #e6ddcc;
+  --color-text: #16130e;
+  --color-text-secondary: #5c5346;
+  --color-text-tertiary: #948a78;
+
+  /* scenius-* ramp → BRICK ramp (was purple — the #1 corporate/crypto tell) */
+  --color-scenius-50: #fbeee8;
+  --color-scenius-100: #f4d9cc;
+  --color-scenius-200: #e9b9a3;
+  --color-scenius-300: #dd9474;
+  --color-scenius-400: #ce6a43;
+  --color-scenius-500: #b0431e;
+  --color-scenius-600: #9a3a1a;
+  --color-scenius-700: #7e2f15;
+  --color-scenius-800: #642614;
+  --color-scenius-900: #4a1d10;
+
+  /* ember-* → OCHRE ramp (pinned/featured) */
+  --color-ember-300: #f0d9a0;
+  --color-ember-400: #e0a93e;
+  --color-ember-500: #c8881e;
+  --color-ember-600: #9a6a12;
+
+  /* sage-* → MOSS ramp (place / success) */
+  --color-sage-50: #eef4ec;
+  --color-sage-100: #d4e4cf;
+  --color-sage-500: #4f8247;
+  --color-sage-600: #3f6b3a;
 }
 
 @layer base {
   body {
-    @apply bg-surface text-text antialiased;
+    @apply bg-paper text-ink antialiased;
+  }
+  /* always-visible focus ring in Brick, square-ish to match the tactile language */
+  :focus-visible {
+    outline: 2px solid var(--color-brick);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 }
 
@@ -46,12 +91,18 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* mono small-caps kicker (UPCOMING, SCENE BUILDERS, JUN) */
+  .kicker {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -64,38 +115,34 @@
   to { opacity: 1; }
 }
 
-@keyframes grain {
-  0%, 100% { transform: translate(0, 0); }
-  10% { transform: translate(-5%, -10%); }
-  30% { transform: translate(3%, -15%); }
-  50% { transform: translate(12%, 9%); }
-  70% { transform: translate(9%, 4%); }
-  90% { transform: translate(-1%, 7%); }
-}
-
 .animate-fade-up {
-  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-fade-in {
   animation: fade-in 0.4s ease both;
 }
 
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
-.stagger-3 { animation-delay: 0.15s; }
-.stagger-4 { animation-delay: 0.2s; }
-.stagger-5 { animation-delay: 0.25s; }
-.stagger-6 { animation-delay: 0.3s; }
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+.stagger-4 { animation-delay: 0.16s; }
+.stagger-5 { animation-delay: 0.2s; }
+.stagger-6 { animation-delay: 0.24s; }
 
+/* Paper tooth — STATIC grain (animated noise reads as TV static / fights trust). */
 .grain::before {
   content: "";
   position: absolute;
-  inset: -50%;
-  width: 200%;
-  height: 200%;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
   pointer-events: none;
-  animation: grain 8s steps(10) infinite;
-  z-index: 1;
+  z-index: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in {
+    animation: none;
+  }
 }
