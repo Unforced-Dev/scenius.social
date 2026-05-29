@@ -11,6 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDid } from "@/lib/auth/session";
 import { dateRail, formatEventTime, formatWeekday } from "@/lib/scenius/time";
+import { ManageMembers } from "@/components/ManageMembers";
 
 export default async function ScenePage({
   params,
@@ -117,6 +118,11 @@ export default async function ScenePage({
           ["builder", "facilitator", "steward"].includes(m.role),
       )
     : false;
+
+  const viewerRole = did ? memberRows.find((m) => m.memberDid === did)?.role : undefined;
+  const isOwner = did === scene.authorDid;
+  const canManage = isOwner || viewerRole === "facilitator" || viewerRole === "steward";
+  const canGrantSteward = isOwner || viewerRole === "steward";
 
   return (
     <div className="min-h-screen">
@@ -383,6 +389,15 @@ export default async function ScenePage({
                 )}
               </div>
             </div>
+
+            {/* Manage members (facilitators/stewards) */}
+            {canManage && (
+              <ManageMembers
+                sceneHandle={handle}
+                members={memberRows}
+                canGrantSteward={canGrantSteward}
+              />
+            )}
           </aside>
         </div>
       </div>

@@ -1,8 +1,11 @@
 import { Agent } from "@atproto/api";
 import { AtUri } from "@atproto/syntax";
 import { createHash } from "node:crypto";
+import { eq, and } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { memberships } from "@/lib/db/schema";
 import { resolveStrongRef } from "./atproto";
-import { canCurate } from "./queries";
+import { canCurate, roleInScene, isSceneOwner } from "./queries";
 import {
   indexScene,
   indexMembership,
@@ -326,6 +329,108 @@ export async function cancelRsvp(agent: Agent, did: string, eventUri: string): P
     if (!/not ?found|could not (find|locate)/i.test(msg)) throw err;
   }
   await applyDelete(uri, NSID.rsvp, null, new Date());
+}
+
+// --- Membership management (facilitator/steward manages the scene roster) ---
+
+const RANK: Record<string, number> = { member: 1, builder: 2, facilitator: 3, steward: 4 };
+
+/** Caller's effective rank in a scene (owner counts as steward). */
+async function callerRank(sceneUri: string, callerDid: string): Promise<number> {
+  if (await isSceneOwner(sceneUri, callerDid)) return 4;
+  const r = await roleInScene(sceneUri, callerDid);
+  return r ? RANK[r] ?? 0 : 0;
+}
+
+async function resolveDid(agent: Agent, handleOrDid: string): Promise<string> {
+  const h = handleOrDid.trim().replace(/^@/, "");
+  if (h.startsWith("did:")) return h;
+  const res = await agent.com.atproto.identity.resolveHandle({ handle: h });
+  return res.data.did;
+}
+
+function membershipRkey(sceneUri: string, memberDid: string): string {
+  return createHash("sha256").update(`${sceneUri}|${memberDid}`).digest("base64url").slice(0, 24);
+}
+
+export type AddMemberRole = "member" | "builder" | "facilitator" | "steward";
+
+/**
+ * Add (or re-role) a member in a scene. Authored by the caller (the scene
+ * operator's repo), so the AppView can rely on the roster and member-gating.
+ * Hierarchy rule: you may grant only roles at or below your own, and must be a
+ * facilitator+ to manage membership at all; only stewards grant steward.
+ * Returns the resolved member DID.
+ */
+export async function addMember(
+  agent: Agent,
+  callerDid: string,
+  sceneUri: string,
+  memberHandleOrDid: string,
+  role: AddMemberRole,
+): Promise<string> {
+  const cr = await callerRank(sceneUri, callerDid);
+  const tr = RANK[role] ?? 0;
+  if (cr < 3) throw new Error("Only facilitators and stewards can manage members.");
+  if (cr < tr) throw new Error(`You can't grant a role above your own.`);
+
+  const memberDid = await resolveDid(agent, memberHandleOrDid);
+  const createdAt = new Date().toISOString();
+  const sceneRef = await resolveStrongRef(agent, sceneUri);
+  const record = {
+    $type: NSID.membership,
+    scene: sceneRef,
+    member: memberDid,
+    role,
+    createdAt,
+  };
+  // deterministic rkey per (scene, member) → re-adding updates the role
+  const rkey = membershipRkey(sceneUri, memberDid);
+  const res = await agent.com.atproto.repo.putRecord({
+    repo: callerDid,
+    collection: NSID.membership,
+    rkey,
+    record,
+  });
+  await indexMembership(res.data.uri, callerDid, record, optimisticMeta(res.data));
+  return memberDid;
+}
+
+/** Remove a member from a scene. Stewards can only be removed by stewards. */
+export async function removeMember(
+  agent: Agent,
+  callerDid: string,
+  sceneUri: string,
+  memberDid: string,
+): Promise<void> {
+  const cr = await callerRank(sceneUri, callerDid);
+  if (cr < 3) throw new Error("Only facilitators and stewards can manage members.");
+
+  const [m] = await db
+    .select({ uri: memberships.uri, role: memberships.role, authorDid: memberships.authorDid })
+    .from(memberships)
+    .where(and(eq(memberships.sceneUri, sceneUri), eq(memberships.memberDid, memberDid)))
+    .limit(1);
+  if (!m) return;
+  if ((RANK[m.role] ?? 0) >= 4 && cr < 4) {
+    throw new Error("Only a steward can remove a steward.");
+  }
+
+  // delete the PDS record if it's in the caller's repo; always de-index
+  if (m.authorDid === callerDid) {
+    try {
+      const u = new AtUri(m.uri);
+      await agent.com.atproto.repo.deleteRecord({
+        repo: callerDid,
+        collection: NSID.membership,
+        rkey: u.rkey,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/not ?found|could not (find|locate)/i.test(msg)) throw err;
+    }
+  }
+  await applyDelete(m.uri, NSID.membership, null, new Date());
 }
 
 // --- Helpers ---
