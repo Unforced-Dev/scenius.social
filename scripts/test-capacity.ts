@@ -11,7 +11,7 @@
  */
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db";
-import { eventInventory, acceptances, rsvps, tombstones } from "../lib/db/schema";
+import { eventInventory, acceptances, rsvps, tombstones, events } from "../lib/db/schema";
 import { indexRsvp, indexEventConfig, arbitrateSeat, approveRequest } from "../lib/scenius/indexer";
 
 const HOST = "did:plc:cap-host";
@@ -43,10 +43,25 @@ async function cleanup() {
   for (const ev of [EVENT_A, EVENT_B]) {
     await db.delete(acceptances).where(eq(acceptances.eventUri, ev));
     await db.delete(eventInventory).where(eq(eventInventory.eventUri, ev));
+    await db.delete(events).where(eq(events.uri, ev));
   }
   const allDids = [...attendees(10, "capA"), ...attendees(4, "capB")];
   await db.delete(rsvps).where(inArray(rsvps.authorDid, allDids));
   await db.delete(tombstones).where(inArray(tombstones.uri, allDids.flatMap((d) => [rsvpUri(d, EVENT_A), rsvpUri(d, EVENT_B)])));
+}
+
+async function insertEvent(uri: string) {
+  await db
+    .insert(events)
+    .values({
+      uri,
+      authorDid: HOST,
+      name: "Capacity Test Event",
+      startsAt: new Date("2026-06-01T00:00:00Z"),
+      status: "scheduled",
+      createdAt: new Date("2026-05-28T00:00:00Z"),
+    })
+    .onConflictDoNothing();
 }
 
 async function main() {
@@ -55,6 +70,7 @@ async function main() {
   const now = new Date();
 
   // --- Event A: capacity 3, waitlist on. 10 concurrent mixed-origin RSVPs. ---
+  await insertEvent(EVENT_A);
   await indexEventConfig(CONFIG_A, HOST, { event: { uri: EVENT_A }, maxAttendees: 3, waitlistEnabled: true }, { source: "firehose", rev: "c1", now });
   const aDids = attendees(10, "capA");
   await Promise.all(
@@ -91,7 +107,13 @@ async function main() {
     ? ok(`release frees seat, NO auto-promote (2 confirmed, 7 still waitlisted)`)
     : bad(`release wrong: confirmed=${c.confirmed} waitlisted=${c.waitlisted.length}`);
 
+  // --- eventConfig authz: a non-host's config for EVENT_A must be rejected ---
+  await indexEventConfig(`at://did:plc:attacker/social.scenius.eventConfig/x`, "did:plc:attacker", { event: { uri: EVENT_A }, maxAttendees: 999 }, { source: "firehose", rev: "evil", now });
+  const [invA] = await db.select().from(eventInventory).where(eq(eventInventory.eventUri, EVENT_A)).limit(1);
+  invA?.capacity === 3 ? ok(`unauthorized eventConfig rejected (capacity still 3, not 999)`) : bad(`attacker overrode capacity: ${invA?.capacity}`);
+
   // --- Event B: approval mode, capacity 2 ---
+  await insertEvent(EVENT_B);
   await indexEventConfig(CONFIG_B, HOST, { event: { uri: EVENT_B }, maxAttendees: 2, approvalRequired: true, waitlistEnabled: true }, { source: "firehose", rev: "c2", now });
   const bDids = attendees(4, "capB");
   await Promise.all(bDids.map((did, i) => indexRsvp(rsvpUri(did, EVENT_B), did, rsvpRecord(EVENT_B), { source: "firehose", rev: `b${i}`, now })));
@@ -101,12 +123,16 @@ async function main() {
     : bad(`approval wrong: confirmed=${c.confirmed} requested=${c.requested}`);
 
   // host approves two → confirmed; third → waitlisted (cap 2 full);
-  await approveRequest(EVENT_B, bDids[0], "confirm", now);
-  await approveRequest(EVENT_B, bDids[1], "confirm", now);
-  const third = await approveRequest(EVENT_B, bDids[2], "confirm", now);
+  await approveRequest(EVENT_B, bDids[0], "confirm", HOST, now);
+  await approveRequest(EVENT_B, bDids[1], "confirm", HOST, now);
+  const third = await approveRequest(EVENT_B, bDids[2], "confirm", HOST, now);
   c = await counts(EVENT_B);
   c.confirmed === 2 ? ok(`host approved 2 → 2 confirmed (cap honored under approval)`) : bad(`approve confirmed=${c.confirmed}`);
   c.waitlisted.length === 1 ? ok(`3rd approval waitlisted (full): ${third.reason}`) : bad(`3rd approval state wrong (wl=${c.waitlisted.length})`);
+
+  // --- approveRequest authz: a non-host caller must be rejected ---
+  const evil = await approveRequest(EVENT_B, bDids[3], "confirm", "did:plc:attacker", now);
+  !evil.ok && evil.reason === "not authorized" ? ok(`approveRequest rejects non-host caller`) : bad(`approveRequest authz failed: ${JSON.stringify(evil)}`);
 
   await cleanup();
   console.log(failed ? "\n\x1b[31m▶ CAPACITY GATE FAILED\x1b[0m\n" : "\n\x1b[32m▶ CAPACITY GATE PASSED\x1b[0m\n");

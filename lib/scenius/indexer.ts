@@ -1,4 +1,4 @@
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, count } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
@@ -295,13 +295,55 @@ export async function indexRsvp(
       setWhere: setWhere(meta, rsvps.source, rsvps.rev),
     });
 
+  // Only arbitrate seats for events we actually index — a crafted RSVP to an
+  // unknown event must not conjure an inventory row / seat.
+  const [ev] = await db
+    .select({ uri: events.uri })
+    .from(events)
+    .where(eq(events.uri, values.eventUri))
+    .limit(1);
+  if (!ev) return;
+
+  // Arbitrate using the COMMITTED status, not the incoming one: a stale-rev
+  // replay's row update was skipped by setWhere, so the incoming status may be
+  // older than what's in the table. Re-read the authoritative status so a stale
+  // 'going' can't re-open a seat that a newer 'notgoing' already released.
+  const [committed] = await db
+    .select({ status: rsvps.status })
+    .from(rsvps)
+    .where(eq(rsvps.uri, uri))
+    .limit(1);
+  const authoritativeStatus = committed?.status ?? values.status;
+
   // Every indexed RSVP — ours OR a firehose RSVP from another app — runs through
   // the same seat arbitration. Idempotent on (eventUri, attendeeDid), so the
   // firehose echo of our optimistic RSVP doesn't re-arbitrate or move the queue.
-  await arbitrateSeat(values.eventUri, authorDid, uri, values.status);
+  await arbitrateSeat(values.eventUri, authorDid, uri, authoritativeStatus);
 }
 
 // --- Capacity arbitration (the keystone) ---
+
+/**
+ * Set an event's capacity policy in the inventory ledger. Called directly by
+ * createEvent (local enforcement — so capacity holds even if the portable
+ * eventConfig PDS write fails) and by the firehose path via indexEventConfig.
+ * Only touches policy fields; counts/waitlistSeq are owned by arbitration.
+ */
+export async function upsertInventoryPolicy(
+  eventUri: string,
+  capacity: number | null,
+  approvalRequired: boolean,
+  waitlistEnabled: boolean,
+  now: Date,
+): Promise<void> {
+  await db
+    .insert(eventInventory)
+    .values({ eventUri, capacity, approvalRequired, waitlistEnabled, updatedAt: now })
+    .onConflictDoUpdate({
+      target: eventInventory.eventUri,
+      set: { capacity, approvalRequired, waitlistEnabled, updatedAt: now },
+    });
+}
 
 export async function indexEventConfig(
   uri: string,
@@ -311,22 +353,44 @@ export async function indexEventConfig(
 ): Promise<void> {
   if (await blockedByTombstone(uri, meta.rev)) return;
   const eventUri = (record.event as { uri: string }).uri;
-  const capacity = (record.maxAttendees as number | undefined) ?? null;
-  const approvalRequired = (record.approvalRequired as boolean) ?? false;
-  const waitlistEnabled = (record.waitlistEnabled as boolean) ?? true;
 
-  // Upsert the inventory row's policy. Counts are owned by arbitration, so we
-  // never overwrite confirmedCount/waitlistSeq here.
-  await db
-    .insert(eventInventory)
-    .values({ eventUri, capacity, approvalRequired, waitlistEnabled, updatedAt: meta.now })
-    .onConflictDoUpdate({
-      target: eventInventory.eventUri,
-      set: { capacity, approvalRequired, waitlistEnabled, updatedAt: meta.now },
-    });
+  // Firehose authz: capacity policy is the HOST's to set. Only index a config
+  // authored by the event's own author — otherwise anyone could write an
+  // eventConfig to their PDS and override capacity on someone else's event.
+  if (meta.source === "firehose") {
+    const [ev] = await db
+      .select({ authorDid: events.authorDid })
+      .from(events)
+      .where(eq(events.uri, eventUri))
+      .limit(1);
+    if (!ev || ev.authorDid !== authorDid) {
+      console.warn(`indexer: rejected unauthorized eventConfig ${uri} from ${authorDid}`);
+      return;
+    }
+  }
+
+  await upsertInventoryPolicy(
+    eventUri,
+    (record.maxAttendees as number | undefined) ?? null,
+    (record.approvalRequired as boolean) ?? false,
+    (record.waitlistEnabled as boolean) ?? true,
+    meta.now,
+  );
 }
 
 const SEAT_SEEKING = "going"; // community.lexicon.calendar.rsvp status that wants a seat
+
+/** Live count of confirmed seats for an event (drift-proof; call under the lock). */
+async function countConfirmed(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  eventUri: string,
+): Promise<number> {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(acceptances)
+    .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.state, "confirmed")));
+  return Number(row?.n ?? 0);
+}
 
 /**
  * Decide a seat for (event, attendee) under capacity, in a single Postgres
@@ -343,7 +407,8 @@ export async function arbitrateSeat(
   now: Date = new Date(),
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    // Ensure a locked inventory row exists (uncapped default if none yet).
+    // Defensively ensure an inventory row exists; the real serialization is the
+    // FOR UPDATE lock acquired next (onConflictDoNothing alone doesn't lock).
     await tx
       .insert(eventInventory)
       .values({ eventUri, updatedAt: now })
@@ -368,15 +433,9 @@ export async function arbitrateSeat(
       existing && ["confirmed", "waitlisted", "requested"].includes(existing.state);
 
     if (!wantsSeat) {
-      // Released (notgoing / interested). Free a confirmed seat; NO auto-promote
+      // Released (notgoing / interested). Free the seat; NO auto-promote
       // (Luma's deliberate default — avoids surprise charges/confusion).
       if (existing && existing.state !== "declined") {
-        if (existing.state === "confirmed") {
-          await tx
-            .update(eventInventory)
-            .set({ confirmedCount: Math.max(0, inv.confirmedCount - 1), updatedAt: now })
-            .where(eq(eventInventory.eventUri, eventUri));
-        }
         await tx
           .update(acceptances)
           .set({ state: "declined", position: null, rsvpUri, decidedAt: now })
@@ -384,23 +443,24 @@ export async function arbitrateSeat(
             and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)),
           );
       }
+      await refreshConfirmedCache(tx, eventUri, inv.waitlistSeq, now);
       return;
     }
 
     // wantsSeat: idempotent if already seated/queued.
     if (hasActiveSeat) return;
 
-    // Assign a fresh seat.
+    // Decide using the LIVE confirmed count (under the row lock) — never a
+    // denormalized counter that could drift from the acceptances ledger.
+    const confirmedNow = await countConfirmed(tx, eventUri);
     let state: string;
     let position: number | null = null;
-    let newConfirmed = inv.confirmedCount;
     let newSeq = inv.waitlistSeq;
 
     if (inv.approvalRequired) {
       state = "requested"; // consumes no seat until a host confirms
-    } else if (inv.capacity == null || inv.confirmedCount < inv.capacity) {
+    } else if (inv.capacity == null || confirmedNow < inv.capacity) {
       state = "confirmed";
-      newConfirmed = inv.confirmedCount + 1;
     } else if (inv.waitlistEnabled) {
       state = "waitlisted";
       newSeq = inv.waitlistSeq + 1;
@@ -417,25 +477,44 @@ export async function arbitrateSeat(
         set: { rsvpUri, state, position, decidedAt: now },
       });
 
-    if (newConfirmed !== inv.confirmedCount || newSeq !== inv.waitlistSeq) {
-      await tx
-        .update(eventInventory)
-        .set({ confirmedCount: newConfirmed, waitlistSeq: newSeq, updatedAt: now })
-        .where(eq(eventInventory.eventUri, eventUri));
-    }
+    await refreshConfirmedCache(tx, eventUri, newSeq, now);
   });
+}
+
+/** Re-derive the confirmedCount cache from the ledger (truth) + persist seq. */
+async function refreshConfirmedCache(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  eventUri: string,
+  waitlistSeq: number,
+  now: Date,
+): Promise<void> {
+  const confirmed = await countConfirmed(tx, eventUri);
+  await tx
+    .update(eventInventory)
+    .set({ confirmedCount: confirmed, waitlistSeq, updatedAt: now })
+    .where(eq(eventInventory.eventUri, eventUri));
 }
 
 /**
  * Host approves a 'requested' attendee → confirmed (capacity permitting).
  * Runs under the inventory lock so it can't oversell against concurrent RSVPs.
+ * Authorized: callerDid MUST be the event's host (author).
  */
 export async function approveRequest(
   eventUri: string,
   attendeeDid: string,
   decision: "confirm" | "decline",
+  callerDid: string,
   now: Date = new Date(),
 ): Promise<{ ok: boolean; reason?: string }> {
+  // Authz: only the event's host may approve/decline requests.
+  const [ev] = await db
+    .select({ authorDid: events.authorDid })
+    .from(events)
+    .where(eq(events.uri, eventUri))
+    .limit(1);
+  if (!ev || ev.authorDid !== callerDid) return { ok: false, reason: "not authorized" };
+
   return db.transaction(async (tx) => {
     const [inv] = await tx
       .select()
@@ -459,7 +538,8 @@ export async function approveRequest(
       return { ok: true };
     }
 
-    if (inv && inv.capacity != null && inv.confirmedCount >= inv.capacity) {
+    const confirmedNow = await countConfirmed(tx, eventUri);
+    if (inv && inv.capacity != null && confirmedNow >= inv.capacity) {
       if (!inv.waitlistEnabled) return { ok: false, reason: "full" };
       const pos = inv.waitlistSeq + 1;
       await tx
@@ -477,12 +557,7 @@ export async function approveRequest(
       .update(acceptances)
       .set({ state: "confirmed", position: null, decidedAt: now })
       .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)));
-    if (inv) {
-      await tx
-        .update(eventInventory)
-        .set({ confirmedCount: inv.confirmedCount + 1, updatedAt: now })
-        .where(eq(eventInventory.eventUri, eventUri));
-    }
+    await refreshConfirmedCache(tx, eventUri, inv?.waitlistSeq ?? 0, now);
     return { ok: true };
   });
 }

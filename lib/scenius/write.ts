@@ -1,8 +1,6 @@
 import { Agent } from "@atproto/api";
 import { AtUri } from "@atproto/syntax";
-import { eq, and } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { rsvps } from "@/lib/db/schema";
+import { createHash } from "node:crypto";
 import { resolveStrongRef } from "./atproto";
 import { canCurate } from "./queries";
 import {
@@ -12,6 +10,7 @@ import {
   indexEventContext,
   indexEventConfig,
   indexRsvp,
+  upsertInventoryPolicy,
   applyDelete,
   type IndexMeta,
 } from "./indexer";
@@ -237,6 +236,17 @@ export async function createEvent(
     input.waitlistEnabled != null ||
     input.tzid != null;
   if (wantsConfig) {
+    // Enforce the policy in the AppView ledger FIRST and unconditionally, so
+    // capacity holds even if the portable eventConfig PDS write below fails.
+    // (A failed PDS write must never silently leave the event uncapped.)
+    await upsertInventoryPolicy(
+      eventUri,
+      input.capacity ?? null,
+      input.approvalRequired ?? false,
+      input.waitlistEnabled ?? true,
+      new Date(),
+    );
+
     const cfgRecord: Record<string, unknown> = {
       $type: NSID.eventConfig,
       event: { uri: eventUri, cid: eRes.data.cid },
@@ -254,11 +264,17 @@ export async function createEvent(
       });
       await indexEventConfig(cfgRes.data.uri, did, cfgRecord, optimisticMeta(cfgRes.data));
     } catch (err) {
-      console.error("eventConfig write failed (event still created):", err);
+      // Policy is already enforced locally; the portable record can be retried.
+      console.error("eventConfig PDS write failed (capacity still enforced):", err);
     }
   }
 
   return { eventUri };
+}
+
+/** Deterministic RSVP record key per (attendee, event) — one record, no races. */
+function rsvpRkey(eventUri: string): string {
+  return createHash("sha256").update(eventUri).digest("base64url").slice(0, 24);
 }
 
 // --- RSVP (intent) → arbitrated seat ---
@@ -284,52 +300,30 @@ export async function createRsvp(
     createdAt,
   };
 
-  // One RSVP record per (attendee, event): reuse the rkey if one exists.
-  const [existing] = await db
-    .select({ uri: rsvps.uri })
-    .from(rsvps)
-    .where(and(eq(rsvps.authorDid, did), eq(rsvps.eventUri, eventUri)))
-    .limit(1);
-
-  let uri: string;
-  let res;
-  if (existing) {
-    const u = new AtUri(existing.uri);
-    res = await agent.com.atproto.repo.putRecord({
-      repo: did,
-      collection: NSID.rsvp,
-      rkey: u.rkey,
-      record,
-    });
-    uri = existing.uri;
-  } else {
-    res = await agent.com.atproto.repo.createRecord({
-      repo: did,
-      collection: NSID.rsvp,
-      record,
-    });
-    uri = res.data.uri;
-  }
-
-  await indexRsvp(uri, did, record, optimisticMeta(res.data));
+  // Deterministic rkey per (attendee, event) → idempotent putRecord. No index
+  // read, so concurrent RSVPs can't create two records for the same event.
+  const rkey = rsvpRkey(eventUri);
+  const res = await agent.com.atproto.repo.putRecord({
+    repo: did,
+    collection: NSID.rsvp,
+    rkey,
+    record,
+  });
+  await indexRsvp(res.data.uri, did, record, optimisticMeta(res.data));
 }
 
 /** Cancel an RSVP: delete the record (releases the seat; no auto-promote). */
 export async function cancelRsvp(agent: Agent, did: string, eventUri: string): Promise<void> {
-  const [existing] = await db
-    .select({ uri: rsvps.uri })
-    .from(rsvps)
-    .where(and(eq(rsvps.authorDid, did), eq(rsvps.eventUri, eventUri)))
-    .limit(1);
-  if (!existing) return;
-
-  const u = new AtUri(existing.uri);
-  await agent.com.atproto.repo.deleteRecord({
-    repo: did,
-    collection: NSID.rsvp,
-    rkey: u.rkey,
-  });
-  await applyDelete(existing.uri, NSID.rsvp, null, new Date());
+  const rkey = rsvpRkey(eventUri);
+  const uri = `at://${did}/${NSID.rsvp}/${rkey}`;
+  try {
+    await agent.com.atproto.repo.deleteRecord({ repo: did, collection: NSID.rsvp, rkey });
+  } catch (err) {
+    // already gone is fine; surface anything else
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/not ?found|could not (find|locate)/i.test(msg)) throw err;
+  }
+  await applyDelete(uri, NSID.rsvp, null, new Date());
 }
 
 // --- Helpers ---
