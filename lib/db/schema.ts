@@ -8,6 +8,23 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+// --- Provenance (on every record-derived table) ---
+// Makes indexing idempotent + commutative regardless of delivery order:
+//   - cid/rev   : content-addressed reconciliation; rev orders firehose writes
+//   - source    : 'optimistic' (our write, awaiting firehose) | 'firehose' (canonical)
+//   - pendingSince/confirmedAt : an optimistic row is a *verifiable claim*; the
+//     orphan sweep promotes (confirmedAt) or rolls back rows past their TTL.
+// Reconciliation rule (see lib/scenius/indexer.ts): firehose beats optimistic;
+// among firehose writes, higher rev wins; deletes leave a tombstone so a late
+// or replayed create cannot resurrect a deleted record.
+const recordProvenance = () => ({
+  cid: text("cid"),
+  rev: text("rev"),
+  source: text("source").notNull().default("firehose"),
+  pendingSince: timestamp("pending_since", { withTimezone: true }),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+});
+
 // --- Auth (OAuth state + session storage for @atproto/oauth-client-node) ---
 
 export const authState = pgTable("auth_state", {
@@ -55,6 +72,7 @@ export const scenes = pgTable(
     memberCount: integer("member_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("scenes_author_idx").on(t.authorDid),
@@ -79,6 +97,7 @@ export const memberships = pgTable(
     role: text("role").notNull().default("member"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("memberships_scene_idx").on(t.sceneUri),
@@ -99,6 +118,7 @@ export const attestations = pgTable(
     statement: text("statement"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("attestations_scene_idx").on(t.sceneUri),
@@ -134,6 +154,7 @@ export const events = pgTable(
     cancellationReason: text("cancellation_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("events_author_idx").on(t.authorDid),
@@ -157,6 +178,7 @@ export const eventContexts = pgTable(
     pinned: boolean("pinned").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("event_contexts_scene_idx").on(t.sceneUri),
@@ -176,6 +198,7 @@ export const rsvps = pgTable(
     status: text("status").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    ...recordProvenance(),
   },
   (t) => [
     index("rsvps_event_idx").on(t.eventUri),
@@ -183,3 +206,21 @@ export const rsvps = pgTable(
     uniqueIndex("rsvps_author_event_idx").on(t.authorDid, t.eventUri),
   ],
 );
+
+// --- Tombstones (deleted records — prevent resurrection by late/replayed creates) ---
+
+export const tombstones = pgTable("tombstones", {
+  uri: text("uri").primaryKey(),
+  collection: text("collection").notNull(),
+  rev: text("rev"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Firehose cursor (single-row watermark for the Tap consumer) ---
+
+export const firehoseCursor = pgTable("firehose_cursor", {
+  id: integer("id").primaryKey().default(1),
+  cursor: text("cursor"),
+  lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

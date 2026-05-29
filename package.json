@@ -15,6 +15,10 @@
     "gen-key": "tsx scripts/gen-key.ts",
     "db:seed": "tsx scripts/seed.ts",
     "verify:pds": "tsx scripts/verify-pds-write.ts",
+    "sweep": "tsx scripts/orphan-sweep.ts",
+    "test:reconciliation": "tsx scripts/test-reconciliation.ts",
+    "test:sweep": "tsx scripts/test-sweep.ts",
+    "test:write-loop": "tsx scripts/test-write-loop.ts",
     "lex:build": "lex build"
   },
   "dependencies": {
