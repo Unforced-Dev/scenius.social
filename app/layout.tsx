@@ -43,6 +43,12 @@ function Nav() {
         </Link>
         <div className="flex items-center gap-1">
           <Link
+            href="/events"
+            className="rounded-lg px-3.5 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-surface-sunken transition-all"
+          >
+            Events
+          </Link>
+          <Link
             href="/scenes"
             className="rounded-lg px-3.5 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-surface-sunken transition-all"
           >
