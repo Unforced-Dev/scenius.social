@@ -33,25 +33,21 @@ export async function createEventAction(
   const name = (formData.get("name") as string)?.trim();
   if (!name) return { error: "Event name is required." };
 
-  const date = (formData.get("date") as string)?.trim();
-  const startTime = (formData.get("startTime") as string)?.trim();
-  if (!date || !startTime) return { error: "Start date and time are required." };
+  // The browser computed the correct UTC instant in the organizer's zone and
+  // sent it + the tzid. The server must NOT re-parse a naive local string.
+  const startsAtUtc = (formData.get("startsAtUtc") as string)?.trim();
+  if (!startsAtUtc) return { error: "Start date and time are required." };
+  const startsAt = new Date(startsAtUtc);
+  if (isNaN(startsAt.getTime())) return { error: "Invalid start date/time." };
+  const endsAtUtc = (formData.get("endsAtUtc") as string)?.trim();
+  const endsAt = endsAtUtc ? new Date(endsAtUtc) : undefined;
+  const tzid = ((formData.get("tzid") as string) || "").trim() || undefined;
 
-  const endTime = (formData.get("endTime") as string)?.trim();
   const description = ((formData.get("description") as string) || "").trim();
   const mode = (formData.get("mode") as EventInput["mode"]) || "inperson";
   const locationName = ((formData.get("locationName") as string) || "").trim();
   const locality = ((formData.get("locality") as string) || "").trim();
   const virtualUri = ((formData.get("virtualUri") as string) || "").trim();
-
-  // Build ISO timestamps from local date + time inputs
-  const startsAt = new Date(`${date}T${startTime}`);
-  if (isNaN(startsAt.getTime())) return { error: "Invalid start date/time." };
-  let endsAt: Date | undefined;
-  if (endTime) {
-    const e = new Date(`${date}T${endTime}`);
-    if (!isNaN(e.getTime())) endsAt = e;
-  }
 
   const capacityRaw = ((formData.get("capacity") as string) || "").trim();
   const capacity = capacityRaw ? Number(capacityRaw) : undefined;
@@ -62,7 +58,7 @@ export async function createEventAction(
     name,
     description: description || undefined,
     startsAt: startsAt.toISOString(),
-    endsAt: endsAt?.toISOString(),
+    endsAt: endsAt && !isNaN(endsAt.getTime()) ? endsAt.toISOString() : undefined,
     mode,
     location:
       locationName || locality
@@ -72,6 +68,7 @@ export async function createEventAction(
     capacity: capacity && capacity > 0 ? capacity : undefined,
     approvalRequired,
     waitlistEnabled,
+    tzid,
   };
 
   try {

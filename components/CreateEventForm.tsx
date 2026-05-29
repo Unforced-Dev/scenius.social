@@ -11,9 +11,29 @@ const initial: CreateEventState = {};
 export function CreateEventForm({ sceneHandle }: { sceneHandle: string }) {
   const [state, formAction, pending] = useActionState(createEventAction, initial);
 
+  // Compute the UTC instant HERE, in the organizer's browser, where their zone
+  // is known, and stash it (+ tzid) in hidden fields so the standard form action
+  // sends them. The server must NOT re-parse the naive date/time in its own zone.
+  function recompute(e: React.FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const date = (form.elements.namedItem("date") as HTMLInputElement)?.value;
+    const st = (form.elements.namedItem("startTime") as HTMLInputElement)?.value;
+    const et = (form.elements.namedItem("endTime") as HTMLInputElement)?.value;
+    const set = (name: string, val: string) => {
+      const el = form.elements.namedItem(name) as HTMLInputElement | null;
+      if (el) el.value = val;
+    };
+    if (date && st) set("startsAtUtc", new Date(`${date}T${st}`).toISOString());
+    if (date && et) set("endsAtUtc", new Date(`${date}T${et}`).toISOString());
+    set("tzid", Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }
+
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onChange={recompute} className="space-y-5">
       <input type="hidden" name="sceneHandle" value={sceneHandle} />
+      <input type="hidden" name="tzid" defaultValue="" />
+      <input type="hidden" name="startsAtUtc" defaultValue="" />
+      <input type="hidden" name="endsAtUtc" defaultValue="" />
 
       <Field label="Event name" hint="">
         <input

@@ -151,6 +151,7 @@ export const events = pgTable(
     locationLocality: text("location_locality"),
     locationAddress: text("location_address"),
     virtualUri: text("virtual_uri"),
+    tzid: text("tzid"), // IANA zone for wall-clock rendering (startsAt is a UTC instant)
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancellationReason: text("cancellation_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -251,6 +252,40 @@ export const tombstones = pgTable("tombstones", {
   rev: text("rev"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// --- Contact channels (AppView-only; never a PDS record — the privacy + GDPR line) ---
+// A DID is not an email and OAuth doesn't grant one, so this is self-entered,
+// double-opt-in email, reused across every scene the user touches.
+
+export const contactChannels = pgTable("contact_channels", {
+  did: text("did").primaryKey(),
+  email: text("email"),
+  verified: boolean("verified").notNull().default(false),
+  source: text("source"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Notification jobs (durable, leased; survives restarts; exactly-once via dedupeKey) ---
+
+export const notificationJobs = pgTable(
+  "notification_jobs",
+  {
+    id: text("id").primaryKey(), // dedupeKey: e.g. reminder_1h:<eventUri>:<did>
+    kind: text("kind").notNull(), // reminder_1d | reminder_1h | confirmation
+    recipientDid: text("recipient_did").notNull(),
+    eventUri: text("event_uri").notNull(),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    status: text("status").notNull().default("pending"), // pending | sent | skipped | failed
+    leasedUntil: timestamp("leased_until", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("notif_due_idx").on(t.status, t.scheduledFor),
+    index("notif_event_idx").on(t.eventUri),
+  ],
+);
 
 // --- Firehose cursor (single-row watermark for the Tap consumer) ---
 

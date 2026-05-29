@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { scenes, events, eventContexts } from "@/lib/db/schema";
 import { eq, gte, asc } from "drizzle-orm";
 import Link from "next/link";
+import { dateRail, formatEventTime, eventTz } from "@/lib/scenius/time";
 
 export default async function Home() {
   const now = new Date();
@@ -15,6 +16,7 @@ export default async function Home() {
       mode: events.mode,
       locationName: events.locationName,
       locationLocality: events.locationLocality,
+      tzid: events.tzid,
       authorDid: events.authorDid,
       sceneName: scenes.name,
       sceneHandle: scenes.handle,
@@ -155,20 +157,24 @@ function EventRow({
     mode: string | null;
     locationName: string | null;
     locationLocality: string | null;
+    tzid: string | null;
     sceneName: string;
     sceneHandle: string | null;
   };
   index: number;
 }) {
   const date = event.startsAt;
-  const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  const day = date.getDate();
-  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+  const { month, day } = dateRail(date, event.tzid);
+  const time = formatEventTime(date, event.tzid);
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: eventTz(event.tzid),
+    weekday: "short",
+  }).format(date);
 
   return (
-    <div
-      className={`animate-fade-up stagger-${Math.min(index + 1, 6)} group flex items-center gap-5 rounded-xl border border-transparent bg-surface-raised px-5 py-4 transition-all hover:border-border hover:shadow-sm cursor-pointer`}
+    <Link
+      href={`/e/${encodeURIComponent(event.uri)}`}
+      className={`animate-fade-up stagger-${Math.min(index + 1, 6)} group flex items-center gap-5 rounded-xl border border-transparent bg-surface-raised px-5 py-4 transition-all hover:border-border hover:shadow-sm`}
     >
       {/* Date block */}
       <div className="flex flex-col items-center w-12 shrink-0">
@@ -200,7 +206,7 @@ function EventRow({
         <span className="h-1.5 w-1.5 rounded-full bg-scenius-400" />
         {event.sceneName}
       </span>
-    </div>
+    </Link>
   );
 }
 

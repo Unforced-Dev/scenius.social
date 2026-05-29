@@ -19,6 +19,7 @@ import {
   canCurate,
   isSceneOwner,
 } from "./queries";
+import { enqueueReminders } from "./notify";
 
 /**
  * The single place a record becomes a row — called by BOTH the optimistic
@@ -298,7 +299,7 @@ export async function indexRsvp(
   // Only arbitrate seats for events we actually index — a crafted RSVP to an
   // unknown event must not conjure an inventory row / seat.
   const [ev] = await db
-    .select({ uri: events.uri })
+    .select({ uri: events.uri, startsAt: events.startsAt })
     .from(events)
     .where(eq(events.uri, values.eventUri))
     .limit(1);
@@ -318,7 +319,12 @@ export async function indexRsvp(
   // Every indexed RSVP — ours OR a firehose RSVP from another app — runs through
   // the same seat arbitration. Idempotent on (eventUri, attendeeDid), so the
   // firehose echo of our optimistic RSVP doesn't re-arbitrate or move the queue.
-  await arbitrateSeat(values.eventUri, authorDid, uri, authoritativeStatus);
+  const seatState = await arbitrateSeat(values.eventUri, authorDid, uri, authoritativeStatus);
+
+  // A confirmed seat earns reminder jobs (idempotent; re-checked at send time).
+  if (seatState === "confirmed") {
+    await enqueueReminders(values.eventUri, authorDid, ev.startsAt, meta.now);
+  }
 }
 
 // --- Capacity arbitration (the keystone) ---
@@ -376,6 +382,13 @@ export async function indexEventConfig(
     (record.waitlistEnabled as boolean) ?? true,
     meta.now,
   );
+  await setEventTzid(eventUri, (record.tzid as string | undefined) ?? null);
+}
+
+/** Denormalize an event's IANA zone onto the events row for easy rendering. */
+export async function setEventTzid(eventUri: string, tzid: string | null): Promise<void> {
+  if (!tzid) return;
+  await db.update(events).set({ tzid }).where(eq(events.uri, eventUri));
 }
 
 const SEAT_SEEKING = "going"; // community.lexicon.calendar.rsvp status that wants a seat
@@ -405,8 +418,8 @@ export async function arbitrateSeat(
   rsvpUri: string,
   rsvpStatus: string,
   now: Date = new Date(),
-): Promise<void> {
-  await db.transaction(async (tx) => {
+): Promise<string | null> {
+  return db.transaction(async (tx) => {
     // Defensively ensure an inventory row exists; the real serialization is the
     // FOR UPDATE lock acquired next (onConflictDoNothing alone doesn't lock).
     await tx
@@ -418,7 +431,7 @@ export async function arbitrateSeat(
       .from(eventInventory)
       .where(eq(eventInventory.eventUri, eventUri))
       .for("update");
-    if (!inv) return;
+    if (!inv) return null;
 
     const [existing] = await tx
       .select()
@@ -444,11 +457,11 @@ export async function arbitrateSeat(
           );
       }
       await refreshConfirmedCache(tx, eventUri, inv.waitlistSeq, now);
-      return;
+      return "declined";
     }
 
     // wantsSeat: idempotent if already seated/queued.
-    if (hasActiveSeat) return;
+    if (hasActiveSeat) return existing!.state;
 
     // Decide using the LIVE confirmed count (under the row lock) — never a
     // denormalized counter that could drift from the acceptances ledger.
@@ -478,6 +491,7 @@ export async function arbitrateSeat(
       });
 
     await refreshConfirmedCache(tx, eventUri, newSeq, now);
+    return state;
   });
 }
 

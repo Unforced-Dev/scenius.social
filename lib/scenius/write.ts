@@ -11,6 +11,7 @@ import {
   indexEventConfig,
   indexRsvp,
   upsertInventoryPolicy,
+  setEventTzid,
   applyDelete,
   type IndexMeta,
 } from "./indexer";
@@ -227,6 +228,7 @@ export async function createEvent(
 
   await indexEvent(eventUri, did, eventRecord, optimisticMeta(eRes.data));
   await indexEventContext(cRes.data.uri, did, ctxRecord, optimisticMeta(cRes.data));
+  if (input.tzid) await setEventTzid(eventUri, input.tzid);
 
   // Capacity / approval / waitlist / tzid → an eventConfig sidecar (best-effort;
   // not on the critical path — a failure here doesn't orphan the event).

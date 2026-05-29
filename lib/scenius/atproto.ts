@@ -1,12 +1,20 @@
 import { Agent } from "@atproto/api";
 import { AtUri } from "@atproto/syntax";
-import { getSession } from "@/lib/auth/session";
+import { getSession, getDid } from "@/lib/auth/session";
+import { devLoginEnabled, getDevAgent } from "./dev-auth";
 
 /**
  * An authenticated Agent built from the current user's OAuth session.
  * Returns null if not signed in. Use for any write to the user's PDS.
  */
 export async function getAuthedAgent(): Promise<{ agent: Agent; did: string } | null> {
+  // DEV-ONLY test seam (hard-gated; see dev-auth.ts) — lets Playwright drive the
+  // authenticated UI through real server actions without bsky's OAuth page.
+  if (devLoginEnabled() && (await getDid())) {
+    const dev = await getDevAgent();
+    if (dev) return dev;
+  }
+
   const session = await getSession();
   if (!session) return null;
   const agent = new Agent(session);

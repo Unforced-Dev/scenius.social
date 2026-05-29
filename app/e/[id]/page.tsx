@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getDid } from "@/lib/auth/session";
 import { getEventCapacity, getSeatState } from "@/lib/scenius/queries";
+import { eventTz, formatWeekday, formatEventTime } from "@/lib/scenius/time";
 import { RsvpButton } from "@/components/RsvpButton";
 import Link from "next/link";
 
@@ -51,20 +52,16 @@ export default async function EventPage({
     capacity?.capacity != null && capacity.confirmed >= capacity.capacity;
 
   const date = event.startsAt;
-  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
-  const monthDay = date.toLocaleDateString("en-US", {
+  const tz = eventTz(event.tzid);
+  const weekday = formatWeekday(date, event.tzid);
+  const monthDay = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
     month: "long",
     day: "numeric",
     year: "numeric",
-  });
-  const startTime = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const endTime = event.endsAt?.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  }).format(date);
+  const startTime = formatEventTime(date, event.tzid);
+  const endTime = event.endsAt ? formatEventTime(event.endsAt, event.tzid) : undefined;
 
   const isCancelled = event.status === "cancelled" || event.cancelledAt;
 
@@ -205,7 +202,8 @@ export default async function EventPage({
             <div>
               <p className="text-xs text-text-tertiary">Hosted by</p>
               <p className="text-sm font-medium">
-                {hostAccount?.displayName || `@${hostAccount?.handle}` || event.authorDid}
+                {hostAccount?.displayName ||
+                  (hostAccount?.handle ? `@${hostAccount.handle}` : "A scene host")}
               </p>
             </div>
           </div>

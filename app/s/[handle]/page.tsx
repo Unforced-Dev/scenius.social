@@ -10,6 +10,7 @@ import { eq, and, gte, lt, asc, desc } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDid } from "@/lib/auth/session";
+import { dateRail, formatEventTime, formatWeekday } from "@/lib/scenius/time";
 
 export default async function ScenePage({
   params,
@@ -40,6 +41,7 @@ export default async function ScenePage({
           mode: events.mode,
           status: events.status,
           locationName: events.locationName,
+          tzid: events.tzid,
           authorDid: events.authorDid,
           pinned: eventContexts.pinned,
         })
@@ -220,14 +222,14 @@ export default async function ScenePage({
               <div className="space-y-2">
                 {upcomingEvents.map((event, i) => {
                   const date = event.startsAt;
-                  const month = date.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-                  const day = date.getDate();
-                  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-                  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+                  const { month, day } = dateRail(date, event.tzid);
+                  const time = formatEventTime(date, event.tzid);
+                  const weekday = formatWeekday(date, event.tzid);
 
                   return (
-                    <div
+                    <Link
                       key={event.uri}
+                      href={`/e/${encodeURIComponent(event.uri)}`}
                       className={`animate-fade-up stagger-${Math.min(i + 1, 6)} group flex items-center gap-5 rounded-xl border border-transparent bg-surface-raised px-5 py-4 transition-all hover:border-border hover:shadow-sm`}
                     >
                       <div className="flex flex-col items-center w-12 shrink-0">
@@ -256,7 +258,7 @@ export default async function ScenePage({
                           )}
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
