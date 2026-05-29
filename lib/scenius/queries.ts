@@ -1,6 +1,6 @@
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and, count } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { scenes, memberships } from "@/lib/db/schema";
+import { scenes, memberships, eventInventory, acceptances } from "@/lib/db/schema";
 
 /** Look up a DID's role in a scene (from the indexed memberships). */
 export async function roleInScene(
@@ -59,4 +59,54 @@ export async function recomputeMemberCount(sceneUri: string): Promise<void> {
       memberCount: sql`(SELECT COUNT(*)::int FROM ${memberships} WHERE ${memberships.sceneUri} = ${sceneUri})`,
     })
     .where(eq(scenes.uri, sceneUri));
+}
+
+export type EventCapacity = {
+  capacity: number | null;
+  approvalRequired: boolean;
+  waitlistEnabled: boolean;
+  confirmed: number;
+  waitlisted: number;
+  requested: number;
+  spotsLeft: number | null; // null = unlimited
+};
+
+/** The live seat picture for an event (from the AppView-authoritative ledger). */
+export async function getEventCapacity(eventUri: string): Promise<EventCapacity | null> {
+  const [inv] = await db
+    .select()
+    .from(eventInventory)
+    .where(eq(eventInventory.eventUri, eventUri))
+    .limit(1);
+  if (!inv) return null;
+
+  const counts = await db
+    .select({ state: acceptances.state, n: count() })
+    .from(acceptances)
+    .where(eq(acceptances.eventUri, eventUri))
+    .groupBy(acceptances.state);
+  const by = (s: string) => Number(counts.find((c) => c.state === s)?.n ?? 0);
+
+  return {
+    capacity: inv.capacity,
+    approvalRequired: inv.approvalRequired,
+    waitlistEnabled: inv.waitlistEnabled,
+    confirmed: inv.confirmedCount,
+    waitlisted: by("waitlisted"),
+    requested: by("requested"),
+    spotsLeft: inv.capacity == null ? null : Math.max(0, inv.capacity - inv.confirmedCount),
+  };
+}
+
+/** A specific attendee's seat state for an event, or null if they haven't RSVP'd. */
+export async function getSeatState(
+  eventUri: string,
+  did: string,
+): Promise<{ state: string; position: number | null } | null> {
+  const [row] = await db
+    .select({ state: acceptances.state, position: acceptances.position })
+    .from(acceptances)
+    .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, did)))
+    .limit(1);
+  return row ?? null;
 }

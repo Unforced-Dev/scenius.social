@@ -68,6 +68,21 @@ export function CreateEventForm({ sceneHandle }: { sceneHandle: string }) {
         />
       </Field>
 
+      <div className="rounded-xl border border-hairline bg-paper/50 p-4 space-y-4">
+        <p className="kicker text-[10px] text-ink-3">Capacity</p>
+        <Field label="Max attendees" hint="Leave blank for unlimited.">
+          <input name="capacity" type="number" min={1} placeholder="40" className="input" />
+        </Field>
+        <label className="flex items-center gap-2.5 text-sm">
+          <input name="approvalRequired" type="checkbox" className="h-4 w-4 accent-brick" />
+          <span>Require host approval (RSVPs are requests until you confirm)</span>
+        </label>
+        <label className="flex items-center gap-2.5 text-sm">
+          <input name="waitlistEnabled" type="checkbox" defaultChecked className="h-4 w-4 accent-brick" />
+          <span>Waitlist once full</span>
+        </label>
+      </div>
+
       {state.error && (
         <div className="rounded-lg bg-red-50 border border-red-200/60 px-3 py-2">
           <p className="text-sm text-red-700">{state.error}</p>

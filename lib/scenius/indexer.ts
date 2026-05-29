@@ -1,4 +1,4 @@
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
@@ -10,6 +10,8 @@ import {
   rsvps,
   tombstones,
   accounts,
+  eventInventory,
+  acceptances,
 } from "@/lib/db/schema";
 import {
   recomputeMemberCount,
@@ -292,6 +294,197 @@ export async function indexRsvp(
       set: omit(values, "uri"),
       setWhere: setWhere(meta, rsvps.source, rsvps.rev),
     });
+
+  // Every indexed RSVP — ours OR a firehose RSVP from another app — runs through
+  // the same seat arbitration. Idempotent on (eventUri, attendeeDid), so the
+  // firehose echo of our optimistic RSVP doesn't re-arbitrate or move the queue.
+  await arbitrateSeat(values.eventUri, authorDid, uri, values.status);
+}
+
+// --- Capacity arbitration (the keystone) ---
+
+export async function indexEventConfig(
+  uri: string,
+  authorDid: string,
+  record: Record<string, unknown>,
+  meta: IndexMeta,
+): Promise<void> {
+  if (await blockedByTombstone(uri, meta.rev)) return;
+  const eventUri = (record.event as { uri: string }).uri;
+  const capacity = (record.maxAttendees as number | undefined) ?? null;
+  const approvalRequired = (record.approvalRequired as boolean) ?? false;
+  const waitlistEnabled = (record.waitlistEnabled as boolean) ?? true;
+
+  // Upsert the inventory row's policy. Counts are owned by arbitration, so we
+  // never overwrite confirmedCount/waitlistSeq here.
+  await db
+    .insert(eventInventory)
+    .values({ eventUri, capacity, approvalRequired, waitlistEnabled, updatedAt: meta.now })
+    .onConflictDoUpdate({
+      target: eventInventory.eventUri,
+      set: { capacity, approvalRequired, waitlistEnabled, updatedAt: meta.now },
+    });
+}
+
+const SEAT_SEEKING = "going"; // community.lexicon.calendar.rsvp status that wants a seat
+
+/**
+ * Decide a seat for (event, attendee) under capacity, in a single Postgres
+ * transaction that locks the event's inventory row (FOR UPDATE). This is the
+ * legitimate centralization: atomicity across attendee PDSes is impossible, so
+ * Postgres is the serialization point. Idempotent: a 'going' RSVP whose seat is
+ * already decided is a no-op (no double-count, no queue movement).
+ */
+export async function arbitrateSeat(
+  eventUri: string,
+  attendeeDid: string,
+  rsvpUri: string,
+  rsvpStatus: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Ensure a locked inventory row exists (uncapped default if none yet).
+    await tx
+      .insert(eventInventory)
+      .values({ eventUri, updatedAt: now })
+      .onConflictDoNothing();
+    const [inv] = await tx
+      .select()
+      .from(eventInventory)
+      .where(eq(eventInventory.eventUri, eventUri))
+      .for("update");
+    if (!inv) return;
+
+    const [existing] = await tx
+      .select()
+      .from(acceptances)
+      .where(
+        and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)),
+      )
+      .limit(1);
+
+    const wantsSeat = rsvpStatus === SEAT_SEEKING;
+    const hasActiveSeat =
+      existing && ["confirmed", "waitlisted", "requested"].includes(existing.state);
+
+    if (!wantsSeat) {
+      // Released (notgoing / interested). Free a confirmed seat; NO auto-promote
+      // (Luma's deliberate default — avoids surprise charges/confusion).
+      if (existing && existing.state !== "declined") {
+        if (existing.state === "confirmed") {
+          await tx
+            .update(eventInventory)
+            .set({ confirmedCount: Math.max(0, inv.confirmedCount - 1), updatedAt: now })
+            .where(eq(eventInventory.eventUri, eventUri));
+        }
+        await tx
+          .update(acceptances)
+          .set({ state: "declined", position: null, rsvpUri, decidedAt: now })
+          .where(
+            and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)),
+          );
+      }
+      return;
+    }
+
+    // wantsSeat: idempotent if already seated/queued.
+    if (hasActiveSeat) return;
+
+    // Assign a fresh seat.
+    let state: string;
+    let position: number | null = null;
+    let newConfirmed = inv.confirmedCount;
+    let newSeq = inv.waitlistSeq;
+
+    if (inv.approvalRequired) {
+      state = "requested"; // consumes no seat until a host confirms
+    } else if (inv.capacity == null || inv.confirmedCount < inv.capacity) {
+      state = "confirmed";
+      newConfirmed = inv.confirmedCount + 1;
+    } else if (inv.waitlistEnabled) {
+      state = "waitlisted";
+      newSeq = inv.waitlistSeq + 1;
+      position = newSeq;
+    } else {
+      state = "declined"; // full, no waitlist
+    }
+
+    await tx
+      .insert(acceptances)
+      .values({ eventUri, attendeeDid, rsvpUri, state, position, decidedAt: now })
+      .onConflictDoUpdate({
+        target: [acceptances.eventUri, acceptances.attendeeDid],
+        set: { rsvpUri, state, position, decidedAt: now },
+      });
+
+    if (newConfirmed !== inv.confirmedCount || newSeq !== inv.waitlistSeq) {
+      await tx
+        .update(eventInventory)
+        .set({ confirmedCount: newConfirmed, waitlistSeq: newSeq, updatedAt: now })
+        .where(eq(eventInventory.eventUri, eventUri));
+    }
+  });
+}
+
+/**
+ * Host approves a 'requested' attendee → confirmed (capacity permitting).
+ * Runs under the inventory lock so it can't oversell against concurrent RSVPs.
+ */
+export async function approveRequest(
+  eventUri: string,
+  attendeeDid: string,
+  decision: "confirm" | "decline",
+  now: Date = new Date(),
+): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const [inv] = await tx
+      .select()
+      .from(eventInventory)
+      .where(eq(eventInventory.eventUri, eventUri))
+      .for("update");
+    const [acc] = await tx
+      .select()
+      .from(acceptances)
+      .where(
+        and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)),
+      )
+      .limit(1);
+    if (!acc || acc.state !== "requested") return { ok: false, reason: "not pending" };
+
+    if (decision === "decline") {
+      await tx
+        .update(acceptances)
+        .set({ state: "declined", decidedAt: now })
+        .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)));
+      return { ok: true };
+    }
+
+    if (inv && inv.capacity != null && inv.confirmedCount >= inv.capacity) {
+      if (!inv.waitlistEnabled) return { ok: false, reason: "full" };
+      const pos = inv.waitlistSeq + 1;
+      await tx
+        .update(acceptances)
+        .set({ state: "waitlisted", position: pos, decidedAt: now })
+        .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)));
+      await tx
+        .update(eventInventory)
+        .set({ waitlistSeq: pos, updatedAt: now })
+        .where(eq(eventInventory.eventUri, eventUri));
+      return { ok: true, reason: "waitlisted (full)" };
+    }
+
+    await tx
+      .update(acceptances)
+      .set({ state: "confirmed", position: null, decidedAt: now })
+      .where(and(eq(acceptances.eventUri, eventUri), eq(acceptances.attendeeDid, attendeeDid)));
+    if (inv) {
+      await tx
+        .update(eventInventory)
+        .set({ confirmedCount: inv.confirmedCount + 1, updatedAt: now })
+        .where(eq(eventInventory.eventUri, eventUri));
+    }
+    return { ok: true };
+  });
 }
 
 // --- identity + deletes ---
@@ -334,6 +527,17 @@ export async function applyDelete(
     membershipScene = m?.sceneUri ?? null;
   }
 
+  // capture rsvp's event+attendee before deleting so we can release its seat
+  let releasedRsvp: { eventUri: string; attendeeDid: string } | null = null;
+  if (collection === "community.lexicon.calendar.rsvp") {
+    const [r] = await db
+      .select({ eventUri: rsvps.eventUri, authorDid: rsvps.authorDid })
+      .from(rsvps)
+      .where(eq(rsvps.uri, uri))
+      .limit(1);
+    if (r) releasedRsvp = { eventUri: r.eventUri, attendeeDid: r.authorDid };
+  }
+
   switch (collection) {
     case "community.lexicon.calendar.event":
       await db.delete(events).where(eq(events.uri, uri));
@@ -353,6 +557,9 @@ export async function applyDelete(
     case "social.scenius.eventContext":
       await db.delete(eventContexts).where(eq(eventContexts.uri, uri));
       break;
+    case "social.scenius.eventConfig":
+      // policy record gone — leave the inventory ledger (counts) intact
+      break;
   }
 
   await db
@@ -361,6 +568,10 @@ export async function applyDelete(
     .onConflictDoUpdate({ target: tombstones.uri, set: { rev, deletedAt: now } });
 
   if (membershipScene) await recomputeMemberCount(membershipScene);
+  // deleting an RSVP releases its seat (treated as 'notgoing'; no auto-promote)
+  if (releasedRsvp) {
+    await arbitrateSeat(releasedRsvp.eventUri, releasedRsvp.attendeeDid, uri, "notgoing", now);
+  }
 }
 
 /** Dispatch a record create/update by collection (used by the firehose webhook). */
@@ -384,5 +595,7 @@ export async function indexRecord(
       return indexAttestation(uri, did, record, meta);
     case "social.scenius.eventContext":
       return indexEventContext(uri, did, record, meta);
+    case "social.scenius.eventConfig":
+      return indexEventConfig(uri, did, record, meta);
   }
 }

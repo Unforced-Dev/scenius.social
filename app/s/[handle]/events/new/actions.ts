@@ -53,6 +53,11 @@ export async function createEventAction(
     if (!isNaN(e.getTime())) endsAt = e;
   }
 
+  const capacityRaw = ((formData.get("capacity") as string) || "").trim();
+  const capacity = capacityRaw ? Number(capacityRaw) : undefined;
+  const approvalRequired = formData.get("approvalRequired") === "on";
+  const waitlistEnabled = formData.get("waitlistEnabled") === "on";
+
   const input: EventInput = {
     name,
     description: description || undefined,
@@ -64,6 +69,9 @@ export async function createEventAction(
         ? { name: locationName || undefined, locality: locality || undefined }
         : undefined,
     virtualUri: virtualUri || undefined,
+    capacity: capacity && capacity > 0 ? capacity : undefined,
+    approvalRequired,
+    waitlistEnabled,
   };
 
   try {

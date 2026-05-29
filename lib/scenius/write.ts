@@ -1,5 +1,8 @@
 import { Agent } from "@atproto/api";
 import { AtUri } from "@atproto/syntax";
+import { eq, and } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { rsvps } from "@/lib/db/schema";
 import { resolveStrongRef } from "./atproto";
 import { canCurate } from "./queries";
 import {
@@ -7,6 +10,9 @@ import {
   indexMembership,
   indexEvent,
   indexEventContext,
+  indexEventConfig,
+  indexRsvp,
+  applyDelete,
   type IndexMeta,
 } from "./indexer";
 
@@ -18,7 +24,9 @@ const NSID = {
   membership: "social.scenius.membership",
   attestation: "social.scenius.attestation",
   eventContext: "social.scenius.eventContext",
+  eventConfig: "social.scenius.eventConfig",
   event: "community.lexicon.calendar.event",
+  rsvp: "community.lexicon.calendar.rsvp",
 } as const;
 
 /** Build optimistic-write provenance from a createRecord response. */
@@ -137,6 +145,11 @@ export type EventInput = {
   mode?: "inperson" | "virtual" | "hybrid";
   location?: { name?: string; locality?: string };
   virtualUri?: string;
+  // capacity config (writes a social.scenius.eventConfig sidecar)
+  capacity?: number;
+  approvalRequired?: boolean;
+  waitlistEnabled?: boolean;
+  tzid?: string;
 };
 
 /**
@@ -216,7 +229,107 @@ export async function createEvent(
   await indexEvent(eventUri, did, eventRecord, optimisticMeta(eRes.data));
   await indexEventContext(cRes.data.uri, did, ctxRecord, optimisticMeta(cRes.data));
 
+  // Capacity / approval / waitlist / tzid → an eventConfig sidecar (best-effort;
+  // not on the critical path — a failure here doesn't orphan the event).
+  const wantsConfig =
+    input.capacity != null ||
+    input.approvalRequired != null ||
+    input.waitlistEnabled != null ||
+    input.tzid != null;
+  if (wantsConfig) {
+    const cfgRecord: Record<string, unknown> = {
+      $type: NSID.eventConfig,
+      event: { uri: eventUri, cid: eRes.data.cid },
+      createdAt,
+    };
+    if (input.capacity != null) cfgRecord.maxAttendees = input.capacity;
+    if (input.approvalRequired != null) cfgRecord.approvalRequired = input.approvalRequired;
+    if (input.waitlistEnabled != null) cfgRecord.waitlistEnabled = input.waitlistEnabled;
+    if (input.tzid) cfgRecord.tzid = input.tzid;
+    try {
+      const cfgRes = await agent.com.atproto.repo.createRecord({
+        repo: did,
+        collection: NSID.eventConfig,
+        record: cfgRecord,
+      });
+      await indexEventConfig(cfgRes.data.uri, did, cfgRecord, optimisticMeta(cfgRes.data));
+    } catch (err) {
+      console.error("eventConfig write failed (event still created):", err);
+    }
+  }
+
   return { eventUri };
+}
+
+// --- RSVP (intent) → arbitrated seat ---
+
+/**
+ * RSVP to an event: writes a community.lexicon.calendar.rsvp to the attendee's
+ * PDS and indexes it, which runs seat arbitration. One record per (attendee,
+ * event) — re-RSVPing updates the existing record. Returns nothing; read the
+ * seat state separately (it's the AppView's decision, not the RSVP's claim).
+ */
+export async function createRsvp(
+  agent: Agent,
+  did: string,
+  eventUri: string,
+  status: "going" | "interested" | "notgoing" = "going",
+): Promise<void> {
+  const createdAt = new Date().toISOString();
+  const eventRef = await resolveStrongRef(agent, eventUri);
+  const record = {
+    $type: NSID.rsvp,
+    subject: eventRef,
+    status,
+    createdAt,
+  };
+
+  // One RSVP record per (attendee, event): reuse the rkey if one exists.
+  const [existing] = await db
+    .select({ uri: rsvps.uri })
+    .from(rsvps)
+    .where(and(eq(rsvps.authorDid, did), eq(rsvps.eventUri, eventUri)))
+    .limit(1);
+
+  let uri: string;
+  let res;
+  if (existing) {
+    const u = new AtUri(existing.uri);
+    res = await agent.com.atproto.repo.putRecord({
+      repo: did,
+      collection: NSID.rsvp,
+      rkey: u.rkey,
+      record,
+    });
+    uri = existing.uri;
+  } else {
+    res = await agent.com.atproto.repo.createRecord({
+      repo: did,
+      collection: NSID.rsvp,
+      record,
+    });
+    uri = res.data.uri;
+  }
+
+  await indexRsvp(uri, did, record, optimisticMeta(res.data));
+}
+
+/** Cancel an RSVP: delete the record (releases the seat; no auto-promote). */
+export async function cancelRsvp(agent: Agent, did: string, eventUri: string): Promise<void> {
+  const [existing] = await db
+    .select({ uri: rsvps.uri })
+    .from(rsvps)
+    .where(and(eq(rsvps.authorDid, did), eq(rsvps.eventUri, eventUri)))
+    .limit(1);
+  if (!existing) return;
+
+  const u = new AtUri(existing.uri);
+  await agent.com.atproto.repo.deleteRecord({
+    repo: did,
+    collection: NSID.rsvp,
+    rkey: u.rkey,
+  });
+  await applyDelete(existing.uri, NSID.rsvp, null, new Date());
 }
 
 // --- Helpers ---

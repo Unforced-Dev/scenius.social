@@ -1,0 +1,45 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.eventConfig",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "Host-set configuration sidecar for a community.lexicon.calendar.event: capacity, approval, waitlist, and timezone. The community calendar lexicon's rsvpExpected is only a display hint; this carries the host's authoritative intent. Enforcement (the seat decision) is computed by the AppView — see social.scenius.acceptance.",
+      "record": {
+        "type": "object",
+        "required": ["event", "createdAt"],
+        "properties": {
+          "event": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The event this configures."
+          },
+          "maxAttendees": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Capacity. Omitted = unlimited."
+          },
+          "approvalRequired": {
+            "type": "boolean",
+            "description": "If true, RSVPs are 'requested' until a host confirms; pending requests consume no seat."
+          },
+          "waitlistEnabled": {
+            "type": "boolean",
+            "description": "If true, RSVPs past capacity are waitlisted in arrival order rather than declined."
+          },
+          "tzid": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "IANA timezone (e.g. America/Denver) for correct wall-clock rendering across DST. The calendar event stores a UTC instant; this preserves the zone."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ import {
   integer,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 // --- Provenance (on every record-derived table) ---
@@ -204,6 +205,41 @@ export const rsvps = pgTable(
     index("rsvps_event_idx").on(t.eventUri),
     index("rsvps_author_idx").on(t.authorDid),
     uniqueIndex("rsvps_author_event_idx").on(t.authorDid, t.eventUri),
+  ],
+);
+
+// --- Event inventory (AppView-authoritative capacity ledger) ---
+// The seat decision can't be atomic across N attendee PDSes, so Postgres is the
+// serialization point: arbitration locks this row (FOR UPDATE) per event. Fully
+// rebuildable from eventConfig + the acceptances ledger.
+
+export const eventInventory = pgTable("event_inventory", {
+  eventUri: text("event_uri").primaryKey(),
+  capacity: integer("capacity"), // null = unlimited
+  approvalRequired: boolean("approval_required").notNull().default(false),
+  waitlistEnabled: boolean("waitlist_enabled").notNull().default(true),
+  confirmedCount: integer("confirmed_count").notNull().default(0),
+  waitlistSeq: integer("waitlist_seq").notNull().default(0), // monotonic, never reused
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// --- Acceptances (the seat ledger — RSVP intent → host/AppView countersignature) ---
+
+export const acceptances = pgTable(
+  "acceptances",
+  {
+    eventUri: text("event_uri").notNull(),
+    attendeeDid: text("attendee_did").notNull(),
+    rsvpUri: text("rsvp_uri").notNull(),
+    state: text("state").notNull(), // confirmed | waitlisted | requested | declined
+    position: integer("position"), // waitlist arrival order
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+    uri: text("uri"), // future: the minted social.scenius.acceptance record (null in v0)
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventUri, t.attendeeDid] }),
+    index("acceptances_event_state_idx").on(t.eventUri, t.state),
+    index("acceptances_attendee_idx").on(t.attendeeDid),
   ],
 );
 

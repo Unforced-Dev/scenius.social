@@ -4,7 +4,9 @@
     "social.scenius.scene",
     "social.scenius.membership",
     "social.scenius.attestation",
-    "social.scenius.eventContext"
+    "social.scenius.eventContext",
+    "social.scenius.eventConfig",
+    "social.scenius.acceptance"
   ],
   "resolutions": {}
 }

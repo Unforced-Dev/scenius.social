@@ -1,0 +1,42 @@
+{
+  "lexicon": 1,
+  "$type": "com.atproto.lexicon.schema",
+  "id": "social.scenius.acceptance",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A host/AppView countersignature on an RSVP — the SEAT, as distinct from the RSVP's INTENT. An RSVP (community.lexicon.calendar.rsvp) lives on the attendee's PDS and says 'I want in'; the acceptance says 'you're confirmed/waitlisted/requested', decided by capacity arbitration. The ticket is the countersignature, not the claim. Modeled on Smoke Signal's events.smokesignal.calendar.acceptance. NOTE: in v0 the seat decision is authoritative in the AppView's Postgres ledger and this record is not yet minted to a PDS — minting awaits host-delegated signing. The shape is reserved here.",
+      "record": {
+        "type": "object",
+        "required": ["subject", "event", "state", "createdAt"],
+        "properties": {
+          "subject": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The RSVP record being accepted/waitlisted."
+          },
+          "event": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The event."
+          },
+          "state": {
+            "type": "string",
+            "knownValues": ["confirmed", "waitlisted", "requested", "declined"],
+            "description": "The seat decision."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Waitlist position (monotonic, arrival order) when state = waitlisted."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

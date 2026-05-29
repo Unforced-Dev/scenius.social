@@ -1,14 +1,10 @@
 import { db } from "@/lib/db";
-import {
-  events,
-  eventContexts,
-  scenes,
-  rsvps,
-  accounts,
-} from "@/lib/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { events, eventContexts, scenes, accounts } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getDid } from "@/lib/auth/session";
+import { getEventCapacity, getSeatState } from "@/lib/scenius/queries";
+import { RsvpButton } from "@/components/RsvpButton";
 import Link from "next/link";
 
 export default async function EventPage({
@@ -24,7 +20,7 @@ export default async function EventPage({
 
   const did = await getDid();
 
-  const [sceneContext, rsvpRows, hostAccount, userRsvp] = await Promise.all([
+  const [sceneContext, capacity, hostAccount, seat] = await Promise.all([
     db
       .select({
         sceneName: scenes.name,
@@ -37,14 +33,7 @@ export default async function EventPage({
       .limit(1)
       .then((rows) => rows[0] ?? null),
 
-    db
-      .select({
-        status: rsvps.status,
-        cnt: count(),
-      })
-      .from(rsvps)
-      .where(eq(rsvps.eventUri, event.uri))
-      .groupBy(rsvps.status),
+    getEventCapacity(event.uri),
 
     db
       .select()
@@ -53,22 +42,13 @@ export default async function EventPage({
       .limit(1)
       .then((rows) => rows[0] ?? null),
 
-    did
-      ? db
-          .select()
-          .from(rsvps)
-          .where(
-            and(eq(rsvps.eventUri, event.uri), eq(rsvps.authorDid, did)),
-          )
-          .limit(1)
-          .then((rows) => rows[0] ?? null)
-      : null,
+    did ? getSeatState(event.uri, did) : null,
   ]);
 
-  const goingCount =
-    rsvpRows.find((r) => r.status === "going")?.cnt ?? 0;
-  const interestedCount =
-    rsvpRows.find((r) => r.status === "interested")?.cnt ?? 0;
+  const goingCount = capacity?.confirmed ?? 0;
+  const waitlistCount = capacity?.waitlisted ?? 0;
+  const full =
+    capacity?.capacity != null && capacity.confirmed >= capacity.capacity;
 
   const date = event.startsAt;
   const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
@@ -248,39 +228,42 @@ export default async function EventPage({
           <aside className="space-y-4">
             {/* RSVP card */}
             {!isCancelled && (
-              <div className="rounded-xl border border-border bg-surface-raised p-5">
+              <div className="rounded-2xl border border-hairline bg-page p-5">
                 <div className="flex items-baseline justify-between">
                   <h3 className="text-sm font-semibold">Attending</h3>
-                  <span className="text-2xl font-bold text-scenius-600">
-                    {Number(goingCount)}
+                  <span className="font-display text-2xl font-600 text-ink">
+                    {goingCount}
+                    {capacity?.capacity != null && (
+                      <span className="text-ink-3 text-base font-400"> / {capacity.capacity}</span>
+                    )}
                   </span>
                 </div>
-                {Number(interestedCount) > 0 && (
-                  <p className="mt-1 text-xs text-text-tertiary">
-                    {Number(interestedCount)} interested
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-ink-3">
+                  {capacity?.capacity != null && capacity.spotsLeft != null
+                    ? full
+                      ? "Full"
+                      : `${capacity.spotsLeft} ${capacity.spotsLeft === 1 ? "spot" : "spots"} left`
+                    : "Open"}
+                  {waitlistCount > 0 ? ` · ${waitlistCount} waitlisted` : ""}
+                </p>
 
-                {did ? (
-                  <div className="mt-4">
-                    {userRsvp ? (
-                      <p className="text-sm text-scenius-600 font-medium">
-                        You&apos;re {userRsvp.status}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-text-tertiary">
-                        RSVP coming soon
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <Link
-                    href="/login"
-                    className="mt-4 block w-full rounded-lg bg-scenius-600 py-2 text-center text-sm font-semibold text-white hover:bg-scenius-700 transition-colors"
-                  >
-                    Sign in to RSVP
-                  </Link>
-                )}
+                <div className="mt-4">
+                  {did ? (
+                    <RsvpButton
+                      eventUri={event.uri}
+                      seat={seat}
+                      approvalRequired={capacity?.approvalRequired ?? false}
+                      full={full}
+                    />
+                  ) : (
+                    <Link
+                      href="/login"
+                      className="block w-full rounded-lg bg-ink py-2.5 text-center text-sm font-semibold text-page hover:bg-ink/90 transition-colors"
+                    >
+                      Sign in to RSVP
+                    </Link>
+                  )}
+                </div>
               </div>
             )}
           </aside>

@@ -14,10 +14,19 @@
  */
 
 import { AtpAgent } from "@atproto/api";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "../lib/db";
-import { scenes, memberships, events, eventContexts } from "../lib/db/schema";
-import { createScene, createEvent } from "../lib/scenius/write";
+import {
+  scenes,
+  memberships,
+  events,
+  eventContexts,
+  rsvps,
+  acceptances,
+  eventInventory,
+} from "../lib/db/schema";
+import { createScene, createEvent, createRsvp, cancelRsvp } from "../lib/scenius/write";
+import { getSeatState } from "../lib/scenius/queries";
 import { parseAtUri } from "../lib/scenius/atproto";
 
 const HANDLE = process.env.BSKY_HANDLE;
@@ -48,8 +57,12 @@ async function cleanup(agent: AtpAgent, did: string, sceneUri?: string) {
   const mems = await db.select().from(memberships).where(eq(memberships.sceneUri, sceneUri));
   const ctxs = await db.select().from(eventContexts).where(eq(eventContexts.sceneUri, sceneUri));
   const eventUris = ctxs.map((c) => c.eventUri);
+  const rsvpRows = eventUris.length
+    ? await db.select().from(rsvps).where(inArray(rsvps.eventUri, eventUris))
+    : [];
 
   for (const uri of [
+    ...rsvpRows.map((r) => r.uri),
     ...ctxs.map((c) => c.uri),
     ...mems.map((m) => m.uri),
     ...eventUris,
@@ -63,6 +76,11 @@ async function cleanup(agent: AtpAgent, did: string, sceneUri?: string) {
   }
 
   // DB rows
+  if (eventUris.length) {
+    await db.delete(rsvps).where(inArray(rsvps.eventUri, eventUris));
+    await db.delete(acceptances).where(inArray(acceptances.eventUri, eventUris));
+    await db.delete(eventInventory).where(inArray(eventInventory.eventUri, eventUris));
+  }
   await db.delete(eventContexts).where(eq(eventContexts.sceneUri, sceneUri));
   for (const eu of eventUris) await db.delete(events).where(eq(events.uri, eu));
   await db.delete(memberships).where(eq(memberships.sceneUri, sceneUri));
@@ -100,7 +118,7 @@ async function main() {
     sceneUri = scene.uri;
     ok(`createScene → ${scene.uri}`);
 
-    // 2. Create an event curated onto the scene
+    // 2. Create an event curated onto the scene (capacity 2)
     const ev = await createEvent(agent, did, scene.uri, {
       name: "Write Loop Test Event",
       description: "Temporary event.",
@@ -108,6 +126,7 @@ async function main() {
       endsAt: new Date(Date.now() + 3 * 86400000 + 7200000).toISOString(),
       mode: "inperson",
       location: { name: "RegenHub" },
+      capacity: 2,
     });
     ok(`createEvent → ${ev.eventUri}`);
 
@@ -125,6 +144,17 @@ async function main() {
     if (ctxRows.length === 1 && ctxRows[0].eventUri === ev.eventUri)
       ok("eventContext links event → scene");
     else fail("eventContext missing/wrong");
+
+    // 3b. RSVP end-to-end: write to PDS → arbitrate → seat → release
+    await createRsvp(agent, did, ev.eventUri, "going");
+    const seat = await getSeatState(ev.eventUri, did);
+    if (seat?.state === "confirmed") ok("createRsvp → seat confirmed (arbitrated)");
+    else fail(`RSVP seat wrong: ${JSON.stringify(seat)}`);
+
+    await cancelRsvp(agent, did, ev.eventUri);
+    const seat2 = await getSeatState(ev.eventUri, did);
+    if (!seat2 || seat2.state === "declined") ok("cancelRsvp → seat released (no auto-promote)");
+    else fail(`RSVP not released: ${JSON.stringify(seat2)}`);
 
     // 4. Verify the live scene page renders the event (the real read path)
     const res = await fetch(`${APP_URL}/s/${TEST_HANDLE}`);

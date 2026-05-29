@@ -18,6 +18,7 @@
     "sweep": "tsx scripts/orphan-sweep.ts",
     "test:reconciliation": "tsx scripts/test-reconciliation.ts",
     "test:sweep": "tsx scripts/test-sweep.ts",
+    "test:capacity": "tsx scripts/test-capacity.ts",
     "test:write-loop": "tsx scripts/test-write-loop.ts",
     "lex:build": "lex build"
   },
