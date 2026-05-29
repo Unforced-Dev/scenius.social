@@ -13,6 +13,7 @@ import {
   indexEventContext,
   indexEventConfig,
   indexRsvp,
+  indexIdentity,
   upsertInventoryPolicy,
   setEventTzid,
   applyDelete,
@@ -375,6 +376,11 @@ export async function addMember(
   if (cr < tr) throw new Error(`You can't grant a role above your own.`);
 
   const memberDid = await resolveDid(agent, memberHandleOrDid);
+  // index the handle so the member displays nicely (no Tap locally)
+  const cleaned = memberHandleOrDid.trim().replace(/^@/, "");
+  if (!cleaned.startsWith("did:")) {
+    await indexIdentity(memberDid, cleaned, true, new Date());
+  }
   const createdAt = new Date().toISOString();
   const sceneRef = await resolveStrongRef(agent, sceneUri);
   const record = {
