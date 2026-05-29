@@ -22,6 +22,9 @@
     "test:time-notify": "tsx scripts/test-time-notify.ts",
     "test:write-loop": "tsx scripts/test-write-loop.ts",
     "test:mcp": "tsx scripts/test-mcp.ts",
+    "test:ical": "tsx scripts/test-ical.ts",
+    "test:import": "tsx scripts/test-import.ts",
+    "import:luma": "tsx scripts/import-luma.ts",
     "mcp": "tsx mcp/server.ts",
     "lex:build": "lex build"
   },
