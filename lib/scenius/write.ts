@@ -154,6 +154,7 @@ export type EventInput = {
   approvalRequired?: boolean;
   waitlistEnabled?: boolean;
   tzid?: string;
+  pinned?: boolean; // pin on the scene's calendar
 };
 
 /**
@@ -215,7 +216,7 @@ export async function createEvent(
     scene: sceneRef,
     curatedBy: did,
     visibility: "public",
-    pinned: false,
+    pinned: input.pinned ?? false,
     createdAt,
   };
   let cRes;
@@ -276,6 +277,46 @@ export async function createEvent(
   }
 
   return { eventUri };
+}
+
+/**
+ * Curate an EXISTING event onto a scene (a builder pulling someone's event onto
+ * their scene calendar — the curation gate). Writes only a social.scenius.
+ * eventContext. Idempotent (deterministic rkey per event+scene). Caller must
+ * hold a curation role in the scene.
+ */
+export async function curateEvent(
+  agent: Agent,
+  callerDid: string,
+  eventUri: string,
+  sceneUri: string,
+  opts: { pinned?: boolean } = {},
+): Promise<void> {
+  if (!(await canCurate(sceneUri, callerDid))) {
+    throw new Error("Not authorized to curate this scene.");
+  }
+  const [eventRef, sceneRef] = await Promise.all([
+    resolveStrongRef(agent, eventUri),
+    resolveStrongRef(agent, sceneUri),
+  ]);
+  const createdAt = new Date().toISOString();
+  const record = {
+    $type: NSID.eventContext,
+    event: eventRef,
+    scene: sceneRef,
+    curatedBy: callerDid,
+    visibility: "public",
+    pinned: opts.pinned ?? false,
+    createdAt,
+  };
+  const rkey = createHash("sha256").update(`${eventUri}|${sceneUri}`).digest("base64url").slice(0, 24);
+  const res = await agent.com.atproto.repo.putRecord({
+    repo: callerDid,
+    collection: NSID.eventContext,
+    rkey,
+    record,
+  });
+  await indexEventContext(res.data.uri, callerDid, record, optimisticMeta(res.data));
 }
 
 /** Deterministic RSVP record key per (attendee, event) — one record, no races. */

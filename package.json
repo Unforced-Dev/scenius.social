@@ -25,6 +25,7 @@
     "test:ical": "tsx scripts/test-ical.ts",
     "test:import": "tsx scripts/test-import.ts",
     "test:members": "tsx scripts/test-members.ts",
+    "verify:rsvp": "tsx scripts/verify-rsvp.ts",
     "import:luma": "tsx scripts/import-luma.ts",
     "mcp": "tsx mcp/server.ts",
     "lex:build": "lex build"
