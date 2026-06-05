@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scenius.social — The scene is the primitive</title>
+<meta name="description" content="Coordination infrastructure where the scene — not the event — is the primitive. It starts as a Luma you can never be held hostage by, and grows into the trust fabric that lets communities self-organize and steward real resources.">
+<meta property="og:title" content="scenius.social — The scene is the primitive">
+<meta property="og:description" content="A Luma you can't be held hostage by → agent-native discovery → AT Protocol interop → trust that compounds into self-organization → communities that can direct resources.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23211c16'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' font-style='italic' text-anchor='middle' fill='%23f7f2e9'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f1e6;
+    --paper-deep:#ede4d2;
+    --ink:#221c15;
+    --ink-2:#5c5346;
+    --ink-3:#8b8071;
+    --brick:#ae4a30;
+    --moss:#5d6e4e;
+    --sky:#46637e;
+    --hair:rgba(34,28,21,.16);
+    --max:880px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Newsreader",Georgia,serif;
+    font-optical-sizing:auto;
+    font-size:19px;
+    line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* paper grain */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection{background:var(--brick);color:var(--paper)}
+
+  .wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+
+  .kicker{
+    font-family:"Newsreader",serif;
+    font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;
+    font-weight:500;color:var(--brick);
+  }
+  .rule{height:1px;background:linear-gradient(90deg,transparent,var(--hair) 12%,var(--hair) 88%,transparent)}
+
+  /* ---------- hero ---------- */
+  header{padding:88px 0 64px;position:relative}
+  .masthead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:72px}
+  .masthead .brand{font-family:"Fraunces",serif;font-weight:600;font-size:21px;letter-spacing:-.01em}
+  .masthead .brand em{font-style:italic;color:var(--brick)}
+  .masthead .meta{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  h1{
+    font-family:"Fraunces",serif;
+    font-variation-settings:"opsz" 144,"SOFT" 40,"WONK" 1;
+    font-weight:430;
+    font-size:clamp(52px,9.2vw,104px);
+    line-height:1.02;letter-spacing:-.022em;
+    max-width:13ch;
+  }
+  h1 em{font-style:italic;color:var(--brick)}
+  .standfirst{
+    margin-top:36px;max-width:58ch;
+    font-size:clamp(20px,2.5vw,24px);line-height:1.55;color:var(--ink-2);
+    font-weight:380;
+  }
+  .standfirst strong{color:var(--ink);font-weight:500}
+  .epigraph{
+    margin-top:60px;padding-left:22px;border-left:2px solid var(--brick);
+    max-width:52ch;font-style:italic;font-size:17.5px;color:var(--ink-2);
+  }
+  .epigraph .who{display:block;margin-top:8px;font-style:normal;font-size:12.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* ---------- kernel ---------- */
+  .kernel{padding:72px 0}
+  .kernel .wrap{display:grid;grid-template-columns:160px 1fr;gap:34px}
+  .kernel h2{font-family:"Fraunces",serif;font-weight:500;font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);padding-top:7px}
+  .kernel p{font-size:clamp(21px,2.6vw,26px);line-height:1.5;font-weight:380;max-width:44ch}
+  .kernel p+p{margin-top:1em}
+  .kernel em{color:var(--brick)}
+
+  /* ---------- ladder ---------- */
+  .ladder{position:relative;padding:30px 0 10px}
+  .rung{position:relative;padding:78px 0}
+  .rung .wrap{display:grid;grid-template-columns:160px 1fr;gap:34px;position:relative}
+  /* spine */
+  .rung .wrap::before{
+    content:"";position:absolute;left:64px;top:-78px;bottom:-78px;width:1px;
+    background:var(--hair);
+  }
+  .rung:first-child .wrap::before{top:14px}
+  .rung:last-child .wrap::before{bottom:auto;height:calc(100% + 78px)}
+  .num{
+    position:relative;z-index:1;
+    font-family:"Fraunces",serif;font-style:italic;font-weight:340;
+    font-size:62px;line-height:1;color:var(--ink);
+    background:var(--paper);
+    width:128px;text-align:center;padding:10px 0;
+  }
+  .num small{display:block;font-style:normal;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3);margin-top:10px;font-family:"Newsreader",serif;font-weight:500}
+  .rung h3{
+    font-family:"Fraunces",serif;font-weight:480;
+    font-variation-settings:"opsz" 60,"SOFT" 30,"WONK" 1;
+    font-size:clamp(30px,4.4vw,42px);line-height:1.12;letter-spacing:-.015em;
+    max-width:20ch;margin-bottom:18px;
+  }
+  .rung h3 em{font-style:italic;color:var(--brick)}
+  .rung p{max-width:62ch;color:var(--ink-2)}
+  .rung p+p{margin-top:.85em}
+  .rung p strong{color:var(--ink);font-weight:500}
+  .chip{
+    display:inline-block;margin-top:22px;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;
+    padding:7px 14px;border:1px solid var(--hair);border-radius:999px;color:var(--ink-2);
+    background:rgba(255,255,255,.35);
+  }
+  .chip.built{border-color:color-mix(in srgb,var(--moss) 45%,transparent);color:var(--moss)}
+  .chip.horizon{border-color:rgba(246,241,230,.35);color:#cdbfa8;background:transparent}
+
+  .rung.alt{background:var(--paper-deep)}
+  .rung.alt .num{background:var(--paper-deep)}
+
+  /* ---------- gradients interlude ---------- */
+  .gradients{padding:84px 0;background:var(--paper-deep)}
+  .gradients .head{max-width:54ch;margin-bottom:46px}
+  .gradients h3{font-family:"Fraunces",serif;font-weight:480;font-size:clamp(26px,3.6vw,34px);line-height:1.15;letter-spacing:-.01em;margin:10px 0 14px}
+  .gradients .head p{color:var(--ink-2)}
+  .gcols{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--hair);border:1px solid var(--hair)}
+  .gcol{background:var(--paper-deep);padding:26px 24px 30px}
+  .gcol .label{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;font-weight:500;color:var(--ink-3)}
+  .gcol .arc{font-family:"Fraunces",serif;font-size:21px;font-weight:500;margin:12px 0 8px;letter-spacing:-.01em}
+  .gcol .arc span{color:var(--brick);font-style:italic;padding:0 .25em}
+  .gcol p{font-size:15.5px;line-height:1.55;color:var(--ink-2)}
+
+  /* ---------- horizon (dark) ---------- */
+  .horizon{
+    background:
+      radial-gradient(120% 90% at 50% 110%, rgba(174,74,48,.22), transparent 55%),
+      radial-gradient(80% 60% at 80% 0%, rgba(70,99,126,.18), transparent 60%),
+      #191510;
+    color:#efe7d6;
+  }
+  .horizon .wrap::before{background:rgba(246,241,230,.18)}
+  .horizon .num{background:transparent;color:#efe7d6}
+  .horizon .num small{color:#a3937c}
+  .horizon h3{color:#f6f1e6}
+  .horizon h3 em{color:#e0795c}
+  .horizon p{color:#c9bca6}
+  .horizon p strong{color:#f0e9d9}
+  .horizon .guard{
+    margin-top:26px;padding:18px 22px;border:1px solid rgba(246,241,230,.2);
+    max-width:56ch;font-size:16.5px;color:#d8cdb8;background:rgba(246,241,230,.04);
+  }
+  .horizon .guard b{font-weight:600;color:#f6f1e6}
+
+  /* ---------- thesis ---------- */
+  .thesis{padding:110px 0;text-align:center;background:#191510;color:#efe7d6;position:relative}
+  .thesis::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 50% at 50% 50%, rgba(174,74,48,.14), transparent 70%)}
+  .thesis .kicker{color:#e0795c}
+  .thesis p{
+    position:relative;
+    font-family:"Fraunces",serif;font-weight:420;
+    font-variation-settings:"opsz" 100,"SOFT" 40,"WONK" 1;
+    font-size:clamp(26px,4.4vw,42px);line-height:1.32;letter-spacing:-.012em;
+    max-width:26ch;margin:22px auto 0;
+  }
+  .thesis p em{font-style:italic;color:#e0795c}
+
+  /* ---------- status ---------- */
+  .status{padding:78px 0}
+  .status h3{font-family:"Fraunces",serif;font-weight:500;font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:26px}
+  .status ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px 28px;max-width:var(--max)}
+  .status li{font-size:16.5px;color:var(--ink-2);padding:9px 0;border-bottom:1px solid var(--hair)}
+  .status li::before{content:"✓";color:var(--moss);margin-right:10px;font-weight:600}
+  .status .next li::before{content:"→";color:var(--brick)}
+  .status h3+ul{margin-bottom:38px}
+
+  footer{padding:40px 0 72px;color:var(--ink-3);font-size:14.5px}
+  footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  footer a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--hair)}
+  footer a:hover{color:var(--brick);border-color:var(--brick)}
+
+  /* ---------- motion ---------- */
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .8s cubic-bezier(.2,.6,.2,1),transform .8s cubic-bezier(.2,.6,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+  header .reveal{transition-delay:calc(var(--d,0)*120ms)}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  @media (max-width:720px){
+    body{font-size:17.5px}
+    .kernel .wrap,.rung .wrap{grid-template-columns:1fr;gap:10px}
+    .rung .wrap::before{display:none}
+    .num{width:auto;text-align:left;padding:0;font-size:46px;display:flex;align-items:baseline;gap:14px}
+    .num small{margin-top:0}
+    .gcols{grid-template-columns:1fr}
+    header{padding:56px 0 44px}
+    .masthead{margin-bottom:48px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="masthead reveal" style="--d:0">
+      <div class="brand">scenius<em>.social</em></div>
+      <div class="meta">Boulder · AT Protocol · AGPL</div>
+    </div>
+    <h1 class="reveal" style="--d:1">The <em>scene</em> is the primitive.</h1>
+    <p class="standfirst reveal" style="--d:2">
+      Coordination infrastructure for communities — starting as <strong>a Luma you can never be
+      held hostage by</strong>, growing into the trust fabric that lets scenes self-organize,
+      and eventually steward real resources.
+    </p>
+    <blockquote class="epigraph reveal" style="--d:3">
+      “Scenius stands for the intelligence and the intuition of a whole cultural scene.
+      It is the communal form of the concept of the genius.”
+      <span class="who">— Brian Eno</span>
+    </blockquote>
+  </div>
+</header>
+
+<div class="rule"></div>
+
+<section class="kernel">
+  <div class="wrap reveal">
+    <h2>The kernel</h2>
+    <div>
+      <p>Every event platform treats the <em>event</em> as the atom and the host as the customer.
+      We invert it: the atom is the <em>scene</em> — a living cultural or geographic community
+      whose calendar, membership, trust, and resources are facets of one thing.</p>
+      <p>Everything below follows from that single inversion.</p>
+    </div>
+  </div>
+</section>
+
+<div class="ladder">
+
+  <section class="rung">
+    <div class="wrap reveal">
+      <div class="num">01<small>The Wedge</small></div>
+      <div>
+        <h3>A Luma replacement that’s <em>deliberately boring</em></h3>
+        <p>Events, RSVPs, capacity &amp; waitlists with real arbitration, reminders, iCal,
+        a Luma importer, scene newsletters. Nobody adopts a trust graph — they adopt a better
+        event tool. The boringness is load-bearing.</p>
+        <p>The honest pitch: <strong>0% fees</strong> (payments host-owned, money never touches us),
+        <strong>your community is yours</strong> — not CRM rows in someone’s SaaS — and
+        <strong>you can leave with everything</strong>. Which, paradoxically, is the strongest
+        reason to stay. RegenHub-off-Luma is the proof case.</p>
+        <span class="chip built">Substantially built &amp; tested</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="rung alt">
+    <div class="wrap reveal">
+      <div class="num">02<small>The Multiplier</small></div>
+      <div>
+        <h3>Agent-native, <em>by architecture</em></h3>
+        <p>Every capability ships three ways — web UI, HTTP API, MCP — by design, not as a bolt-on.
+        The bet: discovery is about to stop being “scroll a feed” and become “ask your agent.”
+        <em>“What’s happening in Boulder this weekend that people I trust are going to?”</em>
+        is an MCP query, not a browsing session.</p>
+        <p>Platforms that are agent-legible win ambient discovery by default. Platforms that
+        aren’t become invisible to the interface people increasingly actually use.</p>
+        <span class="chip built">MCP read surface live</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="rung">
+    <div class="wrap reveal">
+      <div class="num">03<small>The Flywheel</small></div>
+      <div>
+        <h3>Scenes, <em>not algorithms</em></h3>
+        <p>For attendees: calendars curated by humans embedded in the community, plus a city-level
+        feed across scenes. For hosts: <strong>post once, appear everywhere</strong> — every scene
+        whose builders pick your event up, every interoperable app, every agent.</p>
+        <p>Better discovery → more attendees → more hosts → richer calendars. The crucial
+        difference from Luma’s flywheel: <strong>ours is open</strong> — which is the next rung.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="rung alt">
+    <div class="wrap reveal">
+      <div class="num">04<small>The Inversion</small></div>
+      <div>
+        <h3>Built on AT&nbsp;Protocol — <em>we own behavior, never the canon</em></h3>
+        <p>Data lives in users’ own repos under shared lexicons; scenius is an AppView on top.
+        Three consequences, plainly: <strong>free interop</strong> — an event here shows up in
+        Smoke Signal, Dandelion, OpenMeet, and vice versa; the network effect accrues to the
+        ecosystem, not to us. <strong>Credible exit</strong> — every prior community platform
+        eventually held its communities hostage; we <em>can’t</em>, even if we wanted to, and
+        that’s a feature you can pitch. <strong>A commons others build on</strong> — per-scene
+        apps, alternate views, venue integrations, all over the same records.</p>
+        <p>Growth doesn’t require us winning. It requires the commons growing.</p>
+        <span class="chip built">Live on shared lexicons today</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="rung">
+    <div class="wrap reveal">
+      <div class="num">05<small>The Heart</small></div>
+      <div>
+        <h3>Trust that compounds into <em>self-organization</em></h3>
+        <p>The primitives: membership with roles, curation as an additive gate (builders pull
+        events onto the scene calendar), and attestation — peer vouching, the web-of-trust
+        substrate.</p>
+        <p>Governance is a <strong>gradient</strong>: scenes start administered (a founder + a few
+        builders — which is how legitimacy actually bootstraps), and can ratchet toward emergent,
+        attestation-conferred stewardship — a field flip, not a migration. Self-organizing ≠
+        leaderless; it means <strong>distributed, legitimate, transferable stewardship</strong> —
+        with forking as the ultimate backstop, because members own their own records and can walk
+        with the graph.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<section class="gradients">
+  <div class="wrap reveal">
+    <div class="head">
+      <span class="kicker">The design signature</span>
+      <h3>The same move, three times</h3>
+      <p>Meet people where they are. Ratchet toward sovereignty. Never force it.</p>
+    </div>
+    <div class="gcols">
+      <div class="gcol">
+        <div class="label">Governance</div>
+        <div class="arc">administered <span>→</span> emergent</div>
+        <p>A scene starts founder-led and ratchets toward peer-conferred stewardship as trust thickens.</p>
+      </div>
+      <div class="gcol">
+        <div class="label">Identity</div>
+        <div class="arc">email <span>→</span> DID</div>
+        <p>People join a scene’s list with just an email; later, the same history bridges into a sovereign, portable identity.</p>
+      </div>
+      <div class="gcol">
+        <div class="label">Curation</div>
+        <div class="arc">open <span>→</span> featured</div>
+        <p>Anyone can post; scenes and editors shape what’s surfaced. Curated reads over permissionless writes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="ladder">
+  <section class="rung horizon">
+    <div class="wrap reveal">
+      <div class="num">06<small>The Horizon</small></div>
+      <div>
+        <h3>Communities that can <em>direct resources</em></h3>
+        <p>Once a scene has a legible, portable trust graph plus a track record of real
+        coordination — events that actually happened, who showed up, who hosted, who vouched —
+        it becomes a credible unit for stewarding resources: scene treasuries first
+        (0% passthrough), then participatory funding where the trust fabric gates eligibility.</p>
+        <p>Communities that can demonstrate their own coherence can absorb funding effectively —
+        instead of funding flowing to whoever writes the best grant.</p>
+        <div class="guard"><b>The guardrail we never blur:</b> belonging ≠ allocation weight.
+        Attestation answers “do you belong?” — never directly “who gets paid?” — or the trust
+        graph becomes a target and the heart corrupts.</div>
+        <span class="chip horizon">The most exciting rung — and the most speculative</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section class="thesis">
+  <div class="wrap reveal">
+    <span class="kicker">The one-sentence version</span>
+    <p>A Luma you can never be held hostage by — that grows into the trust fabric letting
+    communities <em>self-organize</em>, and eventually <em>steward real resources</em>.</p>
+  </div>
+</section>
+
+<section class="status">
+  <div class="wrap reveal">
+    <h3>Where it stands today</h3>
+    <ul>
+      <li>Events, RSVPs, cross-scene curation</li>
+      <li>Capacity, waitlists, approval — race-safe</li>
+      <li>Timezone-correct everywhere</li>
+      <li>iCal feeds + Luma importer</li>
+      <li>Membership &amp; roles, facilitator onboarding</li>
+      <li>Bluesky OAuth, live on shared lexicons</li>
+      <li>MCP server — agent-readable today</li>
+      <li>Notification &amp; newsletter spine</li>
+    </ul>
+    <h3>Next up</h3>
+    <ul class="next">
+      <li>Unlisted events (visibility enforcement)</li>
+      <li>Scene newsletters go live (email on-ramp)</li>
+      <li>Members-free / guests-pay pricing</li>
+      <li>RegenHub migration off Luma</li>
+    </ul>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<footer>
+  <div class="wrap">
+    <div>scenius.social — seeded in Boulder, built for every scene.</div>
+    <div><a href="https://github.com/Unforced-Dev/scenius.social">github.com/Unforced-Dev/scenius.social</a> · AGPL-3.0</div>
+  </div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries)=>{
+    for (const e of entries) if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+  },{threshold:.12,rootMargin:"0px 0px -40px 0px"});
+  document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>
