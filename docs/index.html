@@ -175,6 +175,15 @@
   }
   .thesis p em{font-style:italic;color:#e0795c}
 
+  /* ---------- sustainability ---------- */
+  .sustain{padding:84px 0}
+  .sustain .wrap{display:grid;grid-template-columns:160px 1fr;gap:34px}
+  .sustain h2{font-family:"Fraunces",serif;font-weight:500;font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);padding-top:6px}
+  .sustain .lede{font-family:"Fraunces",serif;font-size:clamp(22px,2.8vw,28px);font-weight:480;line-height:1.3;letter-spacing:-.012em;color:var(--ink);margin-bottom:16px;max-width:26ch}
+  .sustain p{max-width:62ch;color:var(--ink-2)}
+  .sustain p+p{margin-top:.85em}
+  .sustain p strong{color:var(--ink);font-weight:500}
+
   /* ---------- status ---------- */
   .status{padding:78px 0}
   .status h3{font-family:"Fraunces",serif;font-weight:500;font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:26px}
@@ -197,7 +206,7 @@
 
   @media (max-width:720px){
     body{font-size:17.5px}
-    .kernel .wrap,.rung .wrap{grid-template-columns:1fr;gap:10px}
+    .kernel .wrap,.rung .wrap,.sustain .wrap{grid-template-columns:1fr;gap:10px}
     .rung .wrap::before{display:none}
     .num{width:auto;text-align:left;padding:0;font-size:46px;display:flex;align-items:baseline;gap:14px}
     .num small{margin-top:0}
@@ -385,6 +394,24 @@
     communities <em>self-organize</em>, and eventually <em>steward real resources</em>.</p>
   </div>
 </section>
+
+<section class="sustain">
+  <div class="wrap reveal">
+    <h2>Sustainability</h2>
+    <div>
+      <p class="lede">Charge for what costs us — never for what belongs to them.</p>
+      <p>Never a ticket rake: <strong>0% on tickets, forever</strong>. Open data and open code mean
+      anyone could undercut a rake using our own commons — the protocol forces an honest model.
+      Revenue is service, not extraction: venue &amp; org tooling, newsletter volume, an AI
+      events-coordinator for hosts, managed city instances.</p>
+      <p>Attendees ride free — open API &amp; MCP reads stay open, and the hosted agent concierge
+      has a generous free tier (on the order of 100 queries a month on us, with a small yearly fee
+      only for super-heavy use). Tax compute and convenience, not connection.</p>
+    </div>
+  </div>
+</section>
+
+<div class="rule"></div>
 
 <section class="status">
   <div class="wrap reveal">
